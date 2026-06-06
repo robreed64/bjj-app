@@ -1,0 +1,2203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0D0D0D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="BJJ Timer">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<title>BJJ Mat Timer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --mat-red: #C0392B;
+    --mat-gold: #D4A017;
+    --mat-dark: #0D0D0D;
+    --mat-panel: #141414;
+    --mat-surface: #1C1C1C;
+    --mat-border: #2A2A2A;
+    --mat-text: #F0EDE8;
+    --mat-muted: #888;
+    --warning-color: #FF6B35;
+    --danger-color: #C0392B;
+    --go-color: #27AE60;
+    --font-display: 'Bebas Neue', sans-serif;
+    --font-ui: 'Barlow Condensed', sans-serif;
+    --font-body: 'Barlow', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--mat-dark); color: var(--mat-text); font-family: var(--font-body); min-height: 100vh; overflow-x: hidden; }
+
+  /* ─── LANDING ──────────────────────────────────────────────── */
+  #landing {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 2rem;
+    background: radial-gradient(ellipse at 50% 30%, #1a0a00 0%, var(--mat-dark) 70%);
+    position: relative; overflow: hidden;
+  }
+  #landing::before {
+    content: ''; position: absolute; inset: 0;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(255,255,255,.015) 40px, rgba(255,255,255,.015) 41px),
+      repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(255,255,255,.015) 40px, rgba(255,255,255,.015) 41px);
+    pointer-events: none;
+  }
+  .logo-mark { width: 80px; height: 80px; margin-bottom: 1.5rem; overflow: hidden; }
+  .logo-mark svg, .logo-mark img { width: 100%; height: 100%; object-fit: contain; }
+  .landing-title { font-family: var(--font-display); font-size: clamp(3rem,8vw,6rem); letter-spacing: .05em; color: var(--mat-text); text-align: center; line-height: .9; margin-bottom: .5rem; }
+  .landing-sub { font-family: var(--font-ui); font-size: 1.1rem; letter-spacing: .3em; color: var(--mat-muted); text-transform: uppercase; margin-bottom: 3rem; }
+
+  /* Network address — fixed bottom bar, shows once */
+  .network-footer {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--mat-panel);
+    border-top: 1px solid var(--mat-border);
+    padding: .6rem 1.5rem;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: .75rem;
+    z-index: 10;
+  }
+  .network-footer.visible { display: flex; }
+  .network-footer-label { font-family: var(--font-ui); font-size: .7rem; letter-spacing: .2em; color: var(--mat-muted); text-transform: uppercase; }
+  .network-footer-url { font-family: var(--font-ui); font-size: .95rem; letter-spacing: .08em; color: var(--mat-gold); font-weight: 700; }
+  .mode-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; width: 100%; max-width: 600px; margin-bottom: 2rem; }
+  .mode-card { background: var(--mat-panel); border: 1px solid var(--mat-border); border-radius: 4px; padding: 2rem 1.5rem; cursor: pointer; transition: all .2s; text-align: center; position: relative; overflow: hidden; }
+  .mode-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--mat-gold); transform: scaleX(0); transition: transform .2s; }
+  .mode-card:hover { border-color: var(--mat-gold); background: #1f1f1f; transform: translateY(-2px); box-shadow: 0 8px 32px rgba(212,160,23,.15); }
+  .mode-card:hover::before { transform: scaleX(1); }
+  .mode-icon { font-size: 2.5rem; margin-bottom: .75rem; display: block; }
+  .mode-card h2 { font-family: var(--font-ui); font-size: 1.4rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; margin-bottom: .4rem; }
+  .mode-card p { font-size: .85rem; color: var(--mat-muted); line-height: 1.4; }
+
+  .room-input-section { width: 100%; max-width: 600px; background: var(--mat-panel); border: 1px solid var(--mat-border); border-radius: 4px; padding: 1.5rem; }
+  .room-input-section h3 { font-family: var(--font-ui); font-size: 1rem; letter-spacing: .2em; text-transform: uppercase; color: var(--mat-muted); margin-bottom: 1rem; }
+  .input-row { display: flex; gap: .75rem; }
+
+  input[type="text"] { flex: 1; background: var(--mat-dark); border: 1px solid var(--mat-border); border-radius: 4px; color: var(--mat-text); font-family: var(--font-ui); font-size: 1.1rem; letter-spacing: .1em; padding: .75rem 1rem; outline: none; transition: border-color .2s; text-transform: uppercase; }
+  input[type="text"]:focus { border-color: var(--mat-gold); }
+  input[type="number"] { background: var(--mat-dark); border: 1px solid var(--mat-border); border-radius: 3px; color: var(--mat-text); font-family: var(--font-display); font-size: 1.4rem; text-align: center; padding: .4rem .25rem; width: 100%; outline: none; transition: border-color .2s; }
+  input[type="number"]:focus { border-color: var(--mat-gold); }
+  input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+  /* ─── BUTTONS ──────────────────────────────────────────────── */
+  .btn { font-family: var(--font-ui); font-size: 1rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; border: none; border-radius: 4px; padding: .75rem 1.5rem; cursor: pointer; transition: all .15s; }
+  .btn-gold { background: var(--mat-gold); color: #000; }
+  .btn-gold:hover { background: #e8c547; transform: translateY(-1px); }
+  .btn-outline { background: transparent; color: var(--mat-text); border: 1px solid var(--mat-border); }
+  .btn-outline:hover { border-color: var(--mat-text); }
+  .btn-red { background: var(--mat-red); color: #fff; }
+  .btn-red:hover { background: #e74c3c; }
+  .btn-green { background: var(--go-color); color: #fff; }
+  .btn-green:hover { background: #2ecc71; }
+  .btn-massive { font-size: 1.5rem; padding: 1.2rem 3rem; border-radius: 4px; min-width: 160px; }
+
+  /* ─── STATUS BAR ───────────────────────────────────────────── */
+  .status-bar { background: var(--mat-panel); border-bottom: 1px solid var(--mat-border); padding: .6rem 1.5rem; display: flex; align-items: center; justify-content: space-between; font-family: var(--font-ui); font-size: .85rem; letter-spacing: .1em; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; display: inline-block; margin-right: .5rem; transition: background .3s; }
+  .status-dot.connected { background: var(--go-color); box-shadow: 0 0 6px var(--go-color); }
+  .status-dot.connecting { background: var(--mat-gold); animation: pulse-dot 1s infinite; }
+  @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* ─── TV SLOTS ─────────────────────────────────────────────── */
+  .tv-slots { display: flex; gap: .4rem; align-items: center; }
+  .tv-slot { display: flex; align-items: center; gap: .35rem; background: var(--mat-surface); border: 1px solid var(--mat-border); border-radius: 3px; padding: .25rem .6rem; cursor: pointer; transition: all .15s; position: relative; min-width: 90px; }
+  .tv-slot:hover { border-color: var(--mat-gold); background: #222; }
+  .tv-slot.connected { border-color: rgba(39,174,96,.5); background: rgba(39,174,96,.08); }
+  .tv-slot-icon { font-size: .85rem; opacity: .6; }
+  .tv-slot.connected .tv-slot-icon { opacity: 1; }
+  .tv-slot-label { font-family: var(--font-ui); font-size: .75rem; font-weight: 700; letter-spacing: .1em; color: var(--mat-muted); text-transform: uppercase; }
+  .tv-slot.connected .tv-slot-label { color: var(--mat-text); }
+  .tv-slot-code { font-family: var(--font-ui); font-size: .7rem; letter-spacing: .15em; color: var(--mat-gold); opacity: .8; }
+  .tv-slot-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mat-border); flex-shrink: 0; transition: background .3s; margin-left: auto; }
+  .tv-slot.connected .tv-slot-dot { background: var(--go-color); box-shadow: 0 0 5px var(--go-color); }
+  .tv-slot-tooltip { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #000; border: 1px solid var(--mat-border); border-radius: 3px; padding: .25rem .6rem; font-family: var(--font-ui); font-size: .7rem; letter-spacing: .1em; white-space: nowrap; color: var(--mat-text); pointer-events: none; opacity: 0; transition: opacity .15s; z-index: 100; }
+  .tv-slot:hover .tv-slot-tooltip { opacity: 1; }
+
+  /* ─── CONTROLLER LAYOUT ────────────────────────────────────── */
+  #controller { display: none; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: .4rem 0; }
+  .toggle-row span { font-family: var(--font-ui); font-size: .9rem; }
+  .toggle { position: relative; width: 40px; height: 22px; cursor: pointer; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider { position: absolute; inset: 0; background: var(--mat-border); border-radius: 22px; transition: .2s; }
+  .toggle-slider:before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+  .toggle input:checked + .toggle-slider { background: var(--mat-gold); }
+  .toggle input:checked + .toggle-slider:before { transform: translateX(18px); }
+  .msg-input { width: 100%; background: var(--mat-dark); border: 1px solid var(--mat-border); border-radius: 3px; color: var(--mat-text); font-family: var(--font-ui); font-size: 1rem; padding: .6rem .75rem; outline: none; margin-bottom: .5rem; transition: border-color .2s; }
+  .msg-input:focus { border-color: var(--mat-gold); }
+  .quick-msgs { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .5rem; }
+  .quick-msg-btn { background: var(--mat-surface); border: 1px solid var(--mat-border); border-radius: 3px; color: var(--mat-muted); font-family: var(--font-ui); font-size: .78rem; letter-spacing: .05em; padding: .3rem .6rem; cursor: pointer; transition: all .15s; }
+  .quick-msg-btn:hover { border-color: var(--mat-text); color: var(--mat-text); }
+  .config-field { display: flex; flex-direction: column; gap: .3rem; }
+
+  /* Audio uploads */
+  .audio-uploads { display: flex; flex-direction: column; gap: .5rem; }
+  .audio-upload-row { display: flex; align-items: center; gap: .4rem; }
+  .audio-upload-label { font-family: var(--font-ui); font-size: .8rem; font-weight: 600; letter-spacing: .05em; color: var(--mat-muted); white-space: nowrap; width: 52px; flex-shrink: 0; }
+  .audio-file-btn { flex: 1; background: var(--mat-dark); border: 1px solid var(--mat-border); border-radius: 3px; padding: .3rem .5rem; cursor: pointer; transition: border-color .15s; overflow: hidden; min-width: 0; }
+  .audio-file-btn:hover { border-color: var(--mat-gold); }
+  .audio-file-btn span { font-family: var(--font-ui); font-size: .75rem; letter-spacing: .03em; color: var(--mat-muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .audio-file-btn.loaded span { color: var(--mat-gold); }
+  .audio-file-btn input[type="file"] { display: none; }
+  .audio-play-btn, .audio-clear-btn { background: var(--mat-surface); border: 1px solid var(--mat-border); border-radius: 3px; color: var(--mat-muted); cursor: pointer; font-size: .8rem; padding: .3rem .45rem; line-height: 1; transition: all .15s; flex-shrink: 0; }
+  .audio-play-btn:hover { border-color: var(--go-color); color: var(--go-color); }
+  .audio-clear-btn:hover { border-color: var(--mat-red); color: var(--mat-red); }
+
+  /* ─── CTRL MAIN (full width, phone-friendly) ──────────────────── */
+  .ctrl-main { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem; padding: 1.5rem 1rem; background: radial-gradient(ellipse at 50% 40%, #1a0800 0%, var(--mat-dark) 70%); overflow-y: auto; }
+  .ctrl-tabs { display: flex; gap: 0; border: 1px solid var(--mat-border); border-radius: 4px; overflow: hidden; width: 100%; max-width: 480px; }
+  .ctrl-tab { flex: 1; background: var(--mat-surface); border: none; color: var(--mat-muted); cursor: pointer; font-family: var(--font-ui); font-size: .85rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: .65rem .5rem; transition: all .15s; border-right: 1px solid var(--mat-border); }
+  .ctrl-tab:last-child { border-right: none; }
+  .ctrl-tab:hover { background: var(--mat-panel); color: var(--mat-text); }
+  .ctrl-tab.active { background: var(--mat-gold); color: #000; }
+  .ctrl-panel { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; width: 100%; max-width: 480px; }
+  .ctrl-preview { text-align: center; width: 100%; }
+  .ctrl-timer-display { font-family: var(--font-display); font-size: clamp(4rem,20vw,9rem); line-height: 1; letter-spacing: .02em; color: var(--mat-text); transition: color .3s; text-shadow: 0 0 60px rgba(240,237,232,.1); }
+  .ctrl-timer-display.warning { color: var(--warning-color); text-shadow: 0 0 40px rgba(255,107,53,.3); }
+  .ctrl-timer-display.danger { color: var(--danger-color); text-shadow: 0 0 40px rgba(192,57,43,.4); animation: flash-red .5s infinite; }
+  @keyframes flash-red { 0%,100%{opacity:1} 50%{opacity:.5} }
+  .round-indicator { font-family: var(--font-ui); font-size: .9rem; letter-spacing: .3em; color: var(--mat-muted); text-transform: uppercase; margin-bottom: .25rem; }
+  .phase-label { font-family: var(--font-ui); font-size: .85rem; letter-spacing: .25em; margin-top: .4rem; padding: .25rem .8rem; border-radius: 2px; text-transform: uppercase; display: inline-block; }
+  .phase-label.fight { background: rgba(192,57,43,.2); color: var(--mat-red); border: 1px solid rgba(192,57,43,.3); }
+  .phase-label.rest { background: rgba(39,174,96,.2); color: var(--go-color); border: 1px solid rgba(39,174,96,.3); }
+  .ctrl-buttons { display: flex; gap: .75rem; justify-content: center; width: 100%; }
+  .btn-massive { font-size: clamp(1rem,4vw,1.4rem); padding: 1rem 1.5rem; border-radius: 4px; flex: 1; min-width: 80px; max-width: 160px; text-align: center; }
+  .sw-millis { font-size: .45em; letter-spacing: 0; opacity: .55; vertical-align: baseline; margin-left: .05em; }
+  /* Duration strip */
+  .duration-strip { display: flex; align-items: center; gap: .5rem; width: 100%; justify-content: center; flex-wrap: wrap; }
+  .duration-label { font-family: var(--font-ui); font-size: .75rem; font-weight: 700; letter-spacing: .2em; color: var(--mat-muted); text-transform: uppercase; white-space: nowrap; }
+  .duration-pills { display: flex; gap: .3rem; justify-content: center; flex-wrap: wrap; }
+  .dur-pill { background: var(--mat-surface); border: 1px solid var(--mat-border); border-radius: 4px; color: var(--mat-muted); cursor: pointer; font-family: var(--font-ui); font-size: .95rem; font-weight: 700; letter-spacing: .05em; min-width: 2.4rem; padding: .45rem .5rem; text-align: center; transition: all .15s; }
+  .dur-pill:hover { border-color: var(--mat-gold); color: var(--mat-gold); }
+  .dur-pill.active { background: var(--mat-gold); border-color: var(--mat-gold); color: #000; }
+
+  /* ─── DISPLAY VIEW ─────────────────────────────────────────── */
+  #display { display: none; position: fixed; inset: 0; background: var(--mat-dark); flex-direction: column; }
+  .display-inner { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; background: radial-gradient(ellipse at 50% 35%, #200d00 0%, var(--mat-dark) 65%); transition: background .5s; position: relative; }
+  .display-inner.phase-rest { background: radial-gradient(ellipse at 50% 35%, #062010 0%, var(--mat-dark) 65%); }
+  .display-inner::before { content: ''; position: absolute; inset: 0; background-image: repeating-linear-gradient(0deg,transparent,transparent 60px,rgba(255,255,255,.012) 60px,rgba(255,255,255,.012) 61px), repeating-linear-gradient(90deg,transparent,transparent 60px,rgba(255,255,255,.012) 60px,rgba(255,255,255,.012) 61px); pointer-events: none; }
+  .display-corner { position: absolute; font-family: var(--font-ui); font-size: .75rem; letter-spacing: .25em; color: rgba(255,255,255,.4); text-transform: uppercase; }
+  .display-corner.tl { top: 1.5rem; left: 1.5rem; }
+  .display-corner.tr { top: 1.5rem; right: 1.5rem; display: flex; align-items: center; gap: .4rem; }
+  .display-round { font-family: var(--font-ui); font-size: clamp(1rem,2.5vw,1.4rem); letter-spacing: .5em; color: rgba(255,255,255,.8); text-transform: uppercase; margin-bottom: .5rem; }
+  .display-phase { font-family: var(--font-ui); font-size: clamp(1.2rem,3vw,1.8rem); letter-spacing: .4em; text-transform: uppercase; margin-bottom: 1rem; transition: color .5s; }
+  .display-phase.fight { color: #fff; }
+  .display-phase.rest { color: #fff; }
+  .display-time { font-family: var(--font-display); font-size: clamp(10rem,32vw,28rem); line-height: .85; letter-spacing: .02em; color: #fff; transition: color .3s; position: relative; z-index: 1; }
+  .display-time.warning { color: var(--warning-color); }
+  .display-time.danger { color: var(--danger-color); animation: flash-red .5s infinite; }
+  .display-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.85); display: flex; align-items: center; justify-content: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity .3s; }
+  .display-overlay.visible { opacity: 1; pointer-events: all; }
+  .overlay-msg { font-family: var(--font-display); font-size: clamp(3rem,10vw,8rem); letter-spacing: .05em; text-align: center; color: var(--mat-text); animation: overlay-in .3s ease; }
+  @keyframes overlay-in { from{transform:scale(.9);opacity:0} to{transform:scale(1);opacity:1} }
+
+  /* Reconnecting banner — slim, non-blocking, sits at top of display */
+  .display-reconnect {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    background: rgba(0,0,0,.75);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .75rem;
+    padding: .6rem 1.5rem;
+    z-index: 200;
+    border-bottom: 2px solid var(--mat-gold);
+  }
+  .reconnect-spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,.2);
+    border-top-color: var(--mat-gold);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+    flex-shrink: 0;
+  }
+  .reconnect-text {
+    font-family: var(--font-ui);
+    font-size: clamp(.75rem,1.5vw,1rem);
+    letter-spacing: .2em;
+    color: rgba(255,255,255,.7);
+    text-transform: uppercase;
+  }
+  .display-clock { position: absolute; bottom: 3.5rem; left: 1.5rem; font-family: var(--font-display); font-size: clamp(2.2rem,4.5vw,3.5rem); letter-spacing: .08em; color: rgba(255,255,255,.6); line-height: 1; }
+  .display-status { position: absolute; bottom: 1rem; right: 1rem; font-family: var(--font-ui); font-size: .75rem; letter-spacing: .15em; color: rgba(255,255,255,.15); text-transform: uppercase; display: flex; align-items: center; gap: .4rem; }
+
+
+  /* Back button on display screen — bottom-left, below the clock */
+  .display-back-btn {
+    position: absolute;
+    bottom: 1rem;
+    left: 1.5rem;
+    background: none;
+    border: none;
+    border-radius: 4px;
+    color: rgba(255,255,255,.2);
+    cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .15em;
+    padding: .3rem 0;
+    text-transform: uppercase;
+    transition: color .25s;
+    z-index: 50;
+  }
+  .display-back-btn:hover, .display-back-btn:active {
+    color: rgba(255,255,255,.75);
+  }
+
+  /* QR code bottom-right */
+  .display-qr {
+    position: absolute;
+    bottom: 1.25rem;
+    right: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .4rem;
+    opacity: 0.55;
+    transition: opacity .3s;
+  }
+  .display-qr:hover { opacity: 1; }
+  .display-qr #displayQrCode { background: #fff; border-radius: 4px; padding: 6px; }
+  .display-qr #displayQrCode canvas,
+  .display-qr #displayQrCode img { display: block; width: clamp(70px,8vw,110px) !important; height: clamp(70px,8vw,110px) !important; }
+  .display-qr-label {
+    font-family: var(--font-ui);
+    font-size: clamp(.5rem,.9vw,.75rem);
+    letter-spacing: .08em;
+    color: rgba(255,255,255,.6);
+    text-align: center;
+    text-transform: uppercase;
+    max-width: 120px;
+    word-break: break-all;
+    line-height: 1.3;
+  }
+
+  /* ─── TV COLOR SCHEME ─────────────────────────────────────────── */
+  :root {
+    --tv1: #3B82F6;   /* blue   */
+    --tv2: #10B981;   /* green  */
+    --tv3: #F59E0B;   /* amber  */
+    --tv4: #EC4899;   /* pink   */
+    --tv-float: #8B5CF6; /* purple */
+  }
+
+  .tv-color-1 { --tv-color: var(--tv1); }
+  .tv-color-2 { --tv-color: var(--tv2); }
+  .tv-color-3 { --tv-color: var(--tv3); }
+  .tv-color-4 { --tv-color: var(--tv4); }
+
+  /* Landing TV cards — colored accent bar */
+  .landing-tv-card.tv-color-1::before,
+  .landing-tv-card.tv-color-1:hover::before { background: var(--tv1); transform: scaleX(1); }
+  .landing-tv-card.tv-color-2::before,
+  .landing-tv-card.tv-color-2:hover::before { background: var(--tv2); transform: scaleX(1); }
+  .landing-tv-card.tv-color-3::before,
+  .landing-tv-card.tv-color-3:hover::before { background: var(--tv3); transform: scaleX(1); }
+  .landing-tv-card.tv-color-4::before,
+  .landing-tv-card.tv-color-4:hover::before { background: var(--tv4); transform: scaleX(1); }
+
+  .landing-tv-card.tv-color-1 .landing-tv-code { color: var(--tv1); }
+  .landing-tv-card.tv-color-2 .landing-tv-code { color: var(--tv2); }
+  .landing-tv-card.tv-color-3 .landing-tv-code { color: var(--tv3); }
+  .landing-tv-card.tv-color-4 .landing-tv-code { color: var(--tv4); }
+
+  .landing-tv-card.connected .landing-tv-status { background: var(--tv-color); box-shadow: 0 0 8px var(--tv-color); }
+  .landing-tv-card.tv-taken { opacity: .6; cursor: not-allowed; }
+  .landing-tv-card.tv-taken:hover { transform: none; box-shadow: none; }
+  .landing-tv-card.connected { background: rgba(255,255,255,.04); }
+
+  /* ─── MONITOR BAR (controller status bar) ─────────────────────── */
+  .monitor-bar {
+    display: flex;
+    gap: .4rem;
+    align-items: center;
+    flex: 1;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .monitor-panel {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    background: var(--mat-surface);
+    border: 1px solid var(--mat-border);
+    border-left: 3px solid var(--mat-border);
+    border-radius: 4px;
+    padding: .3rem .65rem .3rem .5rem;
+    min-width: 110px;
+    transition: all .2s;
+    position: relative;
+  }
+
+  .monitor-panel.tv-color-1 { border-left-color: var(--tv1); }
+  .monitor-panel.tv-color-2 { border-left-color: var(--tv2); }
+  .monitor-panel.tv-color-3 { border-left-color: var(--tv3); }
+  .monitor-panel.tv-color-4 { border-left-color: var(--tv4); }
+  .monitor-panel.monitor-floating { border-left-color: var(--tv-float); }
+
+  .monitor-panel.active { background: rgba(255,255,255,.05); }
+  .monitor-panel.tv-color-1.active { background: rgba(59,130,246,.08); border-color: rgba(59,130,246,.4); border-left-color: var(--tv1); }
+  .monitor-panel.tv-color-2.active { background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.4); border-left-color: var(--tv2); }
+  .monitor-panel.tv-color-3.active { background: rgba(245,158,11,.08); border-color: rgba(245,158,11,.4); border-left-color: var(--tv3); }
+  .monitor-panel.tv-color-4.active { background: rgba(236,72,153,.08); border-color: rgba(236,72,153,.4); border-left-color: var(--tv4); }
+  .monitor-panel.monitor-floating.active { background: rgba(139,92,246,.08); border-color: rgba(139,92,246,.4); border-left-color: var(--tv-float); }
+
+  .monitor-icon { font-size: .95rem; opacity: .5; transition: opacity .2s; }
+  .monitor-panel.active .monitor-icon { opacity: 1; }
+
+  .monitor-info { display: flex; flex-direction: column; gap: .05rem; flex: 1; min-width: 0; }
+  .monitor-label { font-family: var(--font-ui); font-size: .7rem; font-weight: 700; letter-spacing: .15em; color: var(--mat-muted); text-transform: uppercase; }
+  .monitor-panel.active .monitor-label { color: var(--mat-text); }
+  .monitor-status-text { font-family: var(--font-ui); font-size: .65rem; letter-spacing: .05em; color: var(--mat-border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .monitor-panel.active .monitor-status-text { color: var(--mat-muted); }
+
+  .monitor-badge { font-family: var(--font-ui); font-size: .65rem; letter-spacing: .1em; color: var(--mat-border); font-weight: 700; }
+
+  .monitor-claim-btn {
+    background: none;
+    border: 1px solid var(--mat-border);
+    border-radius: 3px;
+    color: var(--mat-muted);
+    cursor: pointer;
+    font-family: var(--font-ui);
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    padding: .2rem .4rem;
+    white-space: nowrap;
+    transition: all .15s;
+    flex-shrink: 0;
+  }
+  .monitor-claim-btn:hover { border-color: var(--mat-text); color: var(--mat-text); }
+
+  .monitor-conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mat-border); flex-shrink: 0; transition: all .3s; }
+  .monitor-panel.tv-color-1.active .monitor-conn-dot { background: var(--tv1); box-shadow: 0 0 6px var(--tv1); }
+  .monitor-panel.tv-color-2.active .monitor-conn-dot { background: var(--tv2); box-shadow: 0 0 6px var(--tv2); }
+  .monitor-panel.tv-color-3.active .monitor-conn-dot { background: var(--tv3); box-shadow: 0 0 6px var(--tv3); }
+  .monitor-panel.tv-color-4.active .monitor-conn-dot { background: var(--tv4); box-shadow: 0 0 6px var(--tv4); }
+  .monitor-panel.monitor-floating.active .monitor-conn-dot { background: var(--tv-float); box-shadow: 0 0 6px var(--tv-float); animation: pulse-dot 2s infinite; }
+  .landing-tv-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem; width: 100%; max-width: 680px; margin-bottom: 2rem; }
+  .landing-tv-card { background: var(--mat-panel); border: 1px solid var(--mat-border); border-radius: 6px; padding: 1.25rem .75rem 1rem; text-align: center; cursor: pointer; transition: all .2s; position: relative; overflow: hidden; }
+  .landing-tv-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--mat-gold); transform: scaleX(0); transition: transform .2s; }
+  .landing-tv-card:hover { border-color: var(--mat-gold); transform: translateY(-2px); box-shadow: 0 6px 24px rgba(212,160,23,.15); }
+  .landing-tv-card:hover::before { transform: scaleX(1); }
+  .landing-tv-card.connected { border-color: rgba(39,174,96,.5); background: rgba(39,174,96,.06); }
+  .landing-tv-card.connected::before { background: var(--go-color); transform: scaleX(1); }
+  .landing-tv-icon { font-size: 1.5rem; margin-bottom: .4rem; }
+  .landing-tv-label { font-family: var(--font-ui); font-size: .7rem; font-weight: 700; letter-spacing: .25em; color: var(--mat-muted); text-transform: uppercase; margin-bottom: .5rem; }
+  .landing-tv-code { font-family: var(--font-display); font-size: 1.5rem; letter-spacing: .1em; color: var(--mat-gold); line-height: 1; margin-bottom: .4rem; }
+  .landing-tv-hint { font-family: var(--font-ui); font-size: .65rem; letter-spacing: .1em; color: var(--mat-muted); text-transform: uppercase; }
+  .landing-tv-status { width: 6px; height: 6px; border-radius: 50%; background: var(--mat-border); margin: .5rem auto 0; transition: background .3s; }
+  .landing-tv-card.connected .landing-tv-status { background: var(--go-color); box-shadow: 0 0 6px var(--go-color); }
+
+
+  /* Controller lock button — top-left of landing, subtle */
+  .ctrl-lock-btn {
+    position: absolute;
+    top: 1.25rem;
+    left: 1.25rem;
+    background: none;
+    border: 1px solid var(--mat-border);
+    border-radius: 4px;
+    color: var(--mat-border);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: .4rem .55rem;
+    line-height: 1;
+    transition: all .2s;
+    z-index: 10;
+  }
+  .ctrl-lock-btn:hover {
+    border-color: var(--mat-muted);
+    color: var(--mat-muted);
+  }
+
+  /* ─── SHARE PAGE ──────────────────────────────────────────────── */
+  @media (max-width: 480px) {
+    .landing-tv-grid { grid-template-columns: repeat(2,1fr); }
+  }
+
+  /* ─── BRANDING MODAL ───────────────────────────────────────── */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+  .modal-box { background: var(--mat-panel); border: 1px solid var(--mat-border); border-radius: 6px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 1px solid var(--mat-border); }
+  .modal-title { font-family: var(--font-ui); font-size: 1rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
+  .modal-close { background: none; border: none; color: var(--mat-muted); cursor: pointer; font-size: 1.1rem; padding: .25rem .5rem; transition: color .15s; }
+  .modal-close:hover { color: var(--mat-text); }
+  .modal-body { padding: 1.25rem; display: flex; flex-direction: column; gap: 1.25rem; }
+  .modal-footer { padding: 1rem 1.25rem; border-top: 1px solid var(--mat-border); display: flex; justify-content: flex-end; gap: .75rem; }
+  .modal-field { display: flex; flex-direction: column; gap: .4rem; }
+  .modal-field label { font-family: var(--font-ui); font-size: .75rem; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--mat-muted); }
+  .logo-upload-row { display: flex; gap: .75rem; align-items: flex-start; }
+  .logo-preview { width: 64px; height: 64px; background: var(--mat-dark); border: 1px solid var(--mat-border); border-radius: 4px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; font-family: var(--font-ui); font-size: .65rem; color: var(--mat-muted); letter-spacing: .1em; }
+  .brand-preview-box { background: var(--mat-dark); border: 1px solid var(--mat-border); border-radius: 4px; padding: 1.5rem; display: flex; flex-direction: column; align-items: center; gap: .5rem; }
+  .brand-preview-logo { width: 52px; height: 52px; overflow: hidden; }
+  .brand-preview-logo svg, .brand-preview-logo img { width: 100%; height: 100%; object-fit: contain; }
+  .brand-preview-name { font-family: var(--font-display); font-size: 1.8rem; letter-spacing: .05em; color: var(--mat-text); text-align: center; line-height: 1; }
+  .brand-preview-tagline { font-family: var(--font-ui); font-size: .8rem; letter-spacing: .25em; color: var(--mat-muted); text-transform: uppercase; }
+  .brand-btn { background: none; border: none; color: var(--mat-muted); cursor: pointer; font-size: 1rem; padding: .3rem .5rem; transition: color .15s; line-height: 1; }
+  .brand-btn:hover { color: var(--mat-gold); }
+
+  /* ─── PROFILE GRID ────────────────────────────────────────────── */
+  .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+  .profile-card { background: var(--mat-surface); border: 2px solid var(--mat-border); border-radius: 8px; padding: 1rem .75rem .85rem; cursor: pointer; transition: all .15s; text-align: center; position: relative; overflow: hidden; }
+  .profile-card:hover { border-color: var(--mat-gold); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+  .profile-card .profile-color-bar { position: absolute; top: 0; left: 0; right: 0; height: 4px; border-radius: 2px 2px 0 0; }
+  .profile-card .profile-name { font-family: var(--font-ui); font-size: .95rem; font-weight: 700; letter-spacing: .05em; color: var(--mat-text); margin: .4rem 0 .2rem; line-height: 1.2; }
+  .profile-card .profile-meta { font-family: var(--font-ui); font-size: .7rem; letter-spacing: .1em; color: var(--mat-muted); text-transform: uppercase; }
+  .profile-card .profile-lock { position: absolute; top: .5rem; right: .5rem; font-size: .75rem; opacity: .6; }
+  .profile-card .profile-delete { position: absolute; top: .4rem; left: .4rem; background: none; border: none; color: transparent; font-size: .75rem; cursor: pointer; padding: .1rem .3rem; border-radius: 3px; transition: all .15s; }
+  .profile-card:hover .profile-delete { color: var(--mat-muted); }
+  .profile-card .profile-delete:hover { color: var(--mat-red) !important; background: rgba(192,57,43,.15); }
+
+  /* ─── UTILITY ──────────────────────────────────────────────── */
+  .hidden { display: none !important; }
+  .connecting-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; gap: 1rem; font-family: var(--font-ui); letter-spacing: .2em; text-transform: uppercase; }
+  .spinner { width: 40px; height: 40px; border: 3px solid var(--mat-border); border-top-color: var(--mat-gold); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  #toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--mat-panel); border: 1px solid var(--mat-border); border-radius: 4px; padding: .75rem 1.5rem; font-family: var(--font-ui); font-size: .9rem; letter-spacing: .1em; z-index: 9999; transition: transform .3s; white-space: nowrap; }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  @media (max-width:768px) {
+    .mode-cards { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width:480px) {
+    .mode-cards { grid-template-columns: 1fr; }
+    .ctrl-buttons { flex-direction: column; align-items: stretch; }
+  }
+</style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<!-- ─── LANDING ─────────────────────────────────────────────────── -->
+<div id="landing">
+  <!-- Controller access — small lock icon top-left, away from main buttons -->
+  <button class="ctrl-lock-btn" onclick="promptControllerPassword()" title="Controller Access">⚙</button>
+
+  <div class="logo-mark" id="landingLogoWrap">
+    <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" id="landingLogoSvg">
+      <circle cx="40" cy="40" r="36" fill="none" stroke="#D4A017" stroke-width="2"/>
+      <path d="M20 55 Q30 25 40 40 Q50 55 60 25" fill="none" stroke="#C0392B" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="40" cy="40" r="4" fill="#D4A017"/>
+    </svg>
+    <img id="landingLogoImg" src="" style="display:none;width:100%;height:100%;object-fit:contain">
+  </div>
+  <h1 class="landing-title" id="landingTitle">BJJ Mat Timer</h1>
+  <p class="landing-sub" id="landingTagline">Competition · Training · Sparring</p>
+
+  <!-- TV Codes — tap any to connect this device as that display -->
+  <div class="landing-tv-grid" id="landingTvGrid">
+    <div class="landing-tv-card tv-color-1" id="landing-tv-1" onclick="connectAsDisplay(1)">
+      <div class="landing-tv-icon">📺</div>
+      <div class="landing-tv-label">TV 1</div>
+      <div class="landing-tv-code" id="landing-tv-code-1">——</div>
+      <div class="landing-tv-hint" id="landing-tv-hint-1">tap to connect</div>
+      <div class="landing-tv-status" id="landing-tv-status-1"></div>
+    </div>
+    <div class="landing-tv-card tv-color-2" id="landing-tv-2" onclick="connectAsDisplay(2)">
+      <div class="landing-tv-icon">📺</div>
+      <div class="landing-tv-label">TV 2</div>
+      <div class="landing-tv-code" id="landing-tv-code-2">——</div>
+      <div class="landing-tv-hint" id="landing-tv-hint-2">tap to connect</div>
+      <div class="landing-tv-status" id="landing-tv-status-2"></div>
+    </div>
+    <div class="landing-tv-card tv-color-3" id="landing-tv-3" onclick="connectAsDisplay(3)">
+      <div class="landing-tv-icon">📺</div>
+      <div class="landing-tv-label">TV 3</div>
+      <div class="landing-tv-code" id="landing-tv-code-3">——</div>
+      <div class="landing-tv-hint" id="landing-tv-hint-3">tap to connect</div>
+      <div class="landing-tv-status" id="landing-tv-status-3"></div>
+    </div>
+    <div class="landing-tv-card tv-color-4" id="landing-tv-4" onclick="connectAsDisplay(4)">
+      <div class="landing-tv-icon">📺</div>
+      <div class="landing-tv-label">TV 4</div>
+      <div class="landing-tv-code" id="landing-tv-code-4">——</div>
+      <div class="landing-tv-hint" id="landing-tv-hint-4">tap to connect</div>
+      <div class="landing-tv-status" id="landing-tv-status-4"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─── NETWORK BOX (landing) ───────────────────────────────────── -->
+
+<!-- ─── PROFILE PICKER ────────────────────────────────────────────── -->
+<div id="profilePickerModal" class="modal-backdrop" style="display:none" onclick="closeProfilePicker(event)">
+  <div class="modal-box" style="max-width:480px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">🥋 Who's Running This Class?</span>
+      <button class="modal-close" onclick="closeProfilePicker()">✕</button>
+    </div>
+    <div class="modal-body" style="gap:.75rem">
+      <div class="profile-grid" id="profileGrid">
+        <!-- populated by JS -->
+      </div>
+      <button class="btn btn-outline" style="width:100%;font-size:.9rem;padding:.75rem" onclick="openCreateProfile()">+ Create New Profile</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── CREATE PROFILE MODAL ──────────────────────────────────────── -->
+<div id="createProfileModal" class="modal-backdrop" style="display:none" onclick="closeCreateProfile(event)">
+  <div class="modal-box" style="max-width:380px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">Create Profile</span>
+      <button class="modal-close" onclick="closeCreateProfile()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-field">
+        <label>Name <span style="color:var(--mat-muted);font-weight:400">(coach name or class title)</span></label>
+        <input type="text" id="newProfileName" placeholder="e.g. Coach Mike · Fundamentals" maxlength="40"
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1.05rem;padding:.75rem 1rem;outline:none;width:100%;transition:border-color .2s"
+          onkeydown="if(event.key==='Enter')document.getElementById('newProfilePin').focus()"
+          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+      </div>
+      <div class="modal-field">
+        <label>PIN <span style="color:var(--mat-muted);font-weight:400">(optional — leave blank for no PIN)</span></label>
+        <input type="password" id="newProfilePin" placeholder="Optional PIN" maxlength="20" inputmode="numeric"
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;letter-spacing:.3em;text-align:center;padding:.6rem 1rem;outline:none;width:100%;transition:border-color .2s"
+          onkeydown="if(event.key==='Enter')submitCreateProfile()"
+          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeCreateProfile()">Cancel</button>
+      <button class="btn btn-gold" onclick="submitCreateProfile()">Create &amp; Login</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── PIN ENTRY MODAL ───────────────────────────────────────────── -->
+<div id="pinModal" class="modal-backdrop" style="display:none" onclick="closePinModal(event)">
+  <div class="modal-box" style="max-width:340px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:.6rem">
+        <div id="pinProfileDot" style="width:12px;height:12px;border-radius:50%;background:#888;flex-shrink:0"></div>
+        <span class="modal-title" id="pinProfileTitle">Enter PIN</span>
+      </div>
+      <button class="modal-close" onclick="closePinModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-field">
+        <input type="password" id="pinInput" placeholder="PIN"
+          inputmode="numeric" maxlength="20"
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:2.5rem;letter-spacing:.3em;text-align:center;padding:.75rem 1rem;outline:none;width:100%;transition:border-color .2s"
+          onkeydown="if(event.key==='Enter')submitPin()"
+          onfocus="this.style.borderColor='var(--mat-gold)'"
+          onblur="this.style.borderColor='var(--mat-border)'">
+        <div id="pinError" style="color:var(--mat-red);font-family:var(--font-ui);font-size:.8rem;letter-spacing:.05em;margin-top:.4rem;display:none;text-align:center">Incorrect PIN — try again</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closePinModal()">Back</button>
+      <button class="btn btn-gold" onclick="submitPin()">Enter</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── CONTROLLER ───────────────────────────────────────────────── -->
+<div id="controller">
+  <div class="status-bar">
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <span><span class="status-dot connected" id="ctrlDot"></span><span id="ctrlStatusText" style="font-family:var(--font-ui);letter-spacing:.1em;cursor:pointer;border-bottom:1px dashed var(--mat-border)" onclick="openRenameSession()" title="Click to rename session">Live</span></span>
+      <button class="brand-btn" onclick="openBrandingModal()" title="White Label Settings">⚙</button>
+    </div>
+    <!-- Monitor status panels -->
+    <div class="monitor-bar">
+      <div class="monitor-panel tv-color-1" id="monitor-1">
+        <div class="monitor-icon">🖥</div>
+        <div class="monitor-info">
+          <div class="monitor-label">TV 1</div>
+          <div class="monitor-status-text" id="monitor-status-1">Available</div>
+        </div>
+        <button class="monitor-claim-btn" id="monitor-claim-1" onclick="claimTv(1)">+ Claim</button>
+        <div class="monitor-conn-dot" id="monitor-dot-1"></div>
+      </div>
+      <div class="monitor-panel tv-color-2" id="monitor-2">
+        <div class="monitor-icon">🖥</div>
+        <div class="monitor-info">
+          <div class="monitor-label">TV 2</div>
+          <div class="monitor-status-text" id="monitor-status-2">Available</div>
+        </div>
+        <button class="monitor-claim-btn" id="monitor-claim-2" onclick="claimTv(2)">+ Claim</button>
+        <div class="monitor-conn-dot" id="monitor-dot-2"></div>
+      </div>
+      <div class="monitor-panel tv-color-3" id="monitor-3">
+        <div class="monitor-icon">🖥</div>
+        <div class="monitor-info">
+          <div class="monitor-label">TV 3</div>
+          <div class="monitor-status-text" id="monitor-status-3">Available</div>
+        </div>
+        <button class="monitor-claim-btn" id="monitor-claim-3" onclick="claimTv(3)">+ Claim</button>
+        <div class="monitor-conn-dot" id="monitor-dot-3"></div>
+      </div>
+      <div class="monitor-panel tv-color-4" id="monitor-4">
+        <div class="monitor-icon">🖥</div>
+        <div class="monitor-info">
+          <div class="monitor-label">TV 4</div>
+          <div class="monitor-status-text" id="monitor-status-4">Available</div>
+        </div>
+        <button class="monitor-claim-btn" id="monitor-claim-4" onclick="claimTv(4)">+ Claim</button>
+        <div class="monitor-conn-dot" id="monitor-dot-4"></div>
+      </div>
+      <!-- Floating displays counter -->
+      <div class="monitor-panel monitor-floating" id="monitor-floating">
+        <div class="monitor-icon">📱</div>
+        <div class="monitor-info">
+          <div class="monitor-label">Floating</div>
+          <div class="monitor-status-text" id="monitor-floating-count">0 connected</div>
+        </div>
+        <div class="monitor-conn-dot" id="monitor-floating-dot"></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <button class="btn btn-outline" style="font-size:.75rem;padding:.3rem .75rem" onclick="location.reload()">Exit</button>
+    </div>
+  </div>
+
+  <div class="ctrl-main" style="width:100%;height:calc(100vh - 44px)">
+      <!-- Tabs -->
+      <div class="ctrl-tabs">
+        <button class="ctrl-tab active" id="tabTimer" onclick="switchTab('timer')">⏱ Round Timer</button>
+        <button class="ctrl-tab" id="tabStopwatch" onclick="switchTab('stopwatch')">⏲ Stopwatch</button>
+        <button class="ctrl-tab" onclick="openSettingsModal()" style="margin-left:auto">⚙ Settings</button>
+      </div>
+
+      <!-- Round Timer Panel -->
+      <div class="ctrl-panel" id="panelTimer">
+        <div class="ctrl-preview">
+          <div class="round-indicator" id="ctrlRoundLabel">Round 1 of 3</div>
+          <div class="ctrl-timer-display" id="ctrlTimer">5:00</div>
+          <div class="phase-label fight" id="ctrlPhaseLabel">Fight</div>
+        </div>
+
+        <!-- Main control buttons -->
+        <div class="ctrl-buttons">
+          <button class="btn btn-green btn-massive" id="startPauseBtn" onclick="toggleStartPause()">▶ Start</button>
+          <button class="btn btn-red btn-massive" onclick="resetTimer()">⏹ Reset</button>
+          <button class="btn btn-outline btn-massive" onclick="nextRound()">⏭ Next</button>
+        </div>
+
+        <!-- Duration picker: 1–10 min inline -->
+        <div class="duration-strip">
+          <span class="duration-label">Duration</span>
+          <div class="duration-pills" id="durationPills">
+            <button class="dur-pill" onclick="setDurationMin(1)">1</button>
+            <button class="dur-pill" onclick="setDurationMin(2)">2</button>
+            <button class="dur-pill" onclick="setDurationMin(3)">3</button>
+            <button class="dur-pill" onclick="setDurationMin(4)">4</button>
+            <button class="dur-pill active" onclick="setDurationMin(5)">5</button>
+            <button class="dur-pill" onclick="setDurationMin(6)">6</button>
+            <button class="dur-pill" onclick="setDurationMin(7)">7</button>
+            <button class="dur-pill" onclick="setDurationMin(8)">8</button>
+            <button class="dur-pill" onclick="setDurationMin(9)">9</button>
+            <button class="dur-pill" onclick="setDurationMin(10)">10</button>
+          </div>
+          <span class="duration-label">min</span>
+        </div>
+      </div>
+
+      <!-- Stopwatch Panel -->
+      <div class="ctrl-panel hidden" id="panelStopwatch">
+        <div class="ctrl-preview">
+          <div class="round-indicator">Stopwatch</div>
+          <div class="ctrl-timer-display" id="swDisplay">0:00<span class="sw-millis">.00</span></div>
+        </div>
+        <div class="ctrl-buttons">
+          <button class="btn btn-green btn-massive" id="swStartPauseBtn" onclick="swToggle()">▶ Start</button>
+          <button class="btn btn-outline btn-massive" onclick="swReset()">⏹ Reset</button>
+        </div>
+      </div>
+    </div>
+</div>
+
+<!-- ─── SETTINGS MODAL ────────────────────────────────────────────── -->
+<div id="settingsModal" class="modal-backdrop" style="display:none" onclick="closeSettingsModal(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">⚙ Settings</span>
+      <button class="modal-close" onclick="closeSettingsModal()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Rounds & Rest -->
+      <div class="modal-field">
+        <label>Number of Rounds</label>
+        <input type="number" id="totalRoundsInput" value="10" min="1" max="20" onchange="updateConfig()"
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none"
+          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+      </div>
+      <div class="modal-field">
+        <label>Rest Between Rounds (seconds)</label>
+        <input type="number" id="restTimeInput" value="60" min="0" max="600" onchange="updateConfig()"
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none"
+          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+      </div>
+
+      <!-- Warning -->
+      <div class="modal-field">
+        <label>Display Options</label>
+        <div class="toggle-row"><span>Enable countdown warning</span><label class="toggle"><input type="checkbox" id="warningToggle" checked onchange="updateConfig()"><span class="toggle-slider"></span></label></div>
+        <div class="toggle-row"><span>Show round counter on display</span><label class="toggle"><input type="checkbox" id="showRoundToggle" onchange="updateConfig()"><span class="toggle-slider"></span></label></div>
+      </div>
+      <div class="modal-field">
+        <label>Warn at (seconds remaining)</label>
+        <input type="number" id="warningThreshold" value="30" min="5" max="120" onchange="updateConfig()"
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-display);font-size:1.8rem;text-align:center;padding:.5rem;width:100%;outline:none"
+          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'">
+      </div>
+
+      <!-- Broadcast -->
+      <div class="modal-field">
+        <label>Broadcast Message to Displays</label>
+        <input type="text" class="msg-input" id="msgInput" placeholder="Message to all displays..." style="margin-bottom:.5rem">
+        <div class="quick-msgs">
+          <span class="quick-msg-btn" onclick="sendQuickMsg('FIGHT!')">FIGHT!</span>
+          <span class="quick-msg-btn" onclick="sendQuickMsg('STOP')">STOP</span>
+          <span class="quick-msg-btn" onclick="sendQuickMsg('REFEREE DECISION')">REF DECISION</span>
+          <span class="quick-msg-btn" onclick="sendQuickMsg('SUBMISSION')">SUBMISSION</span>
+          <span class="quick-msg-btn" onclick="sendQuickMsg('POINTS DECISION')">POINTS WIN</span>
+          <span class="quick-msg-btn" onclick="sendQuickMsg('')">Clear</span>
+        </div>
+        <button class="btn btn-outline" style="width:100%;font-size:.85rem;margin-top:.5rem" onclick="sendMsg()">Send to Displays</button>
+      </div>
+
+      <!-- Sounds -->
+      <div class="modal-field">
+        <label>Sounds</label>
+        <div class="toggle-row"><span>Countdown beeps</span><label class="toggle"><input type="checkbox" id="soundBeepToggle" checked><span class="toggle-slider"></span></label></div>
+        <div class="toggle-row"><span>End buzzer</span><label class="toggle"><input type="checkbox" id="soundBuzzerToggle" checked><span class="toggle-slider"></span></label></div>
+        <button class="btn btn-outline" style="width:100%;font-size:.8rem;margin-top:.5rem;margin-bottom:1rem" onclick="testBuzzer()">🔊 Test Buzzer</button>
+        <div class="audio-uploads">
+          <div class="audio-upload-row">
+            <span class="audio-upload-label">▶ Start</span>
+            <label class="audio-file-btn" for="audioStart"><span id="audioStartName">Choose file</span><input type="file" id="audioStart" accept="audio/*" onchange="loadAudioFile('start',this)"></label>
+            <button class="audio-play-btn" onclick="previewCustomAudio('start')">▷</button>
+            <button class="audio-clear-btn" onclick="clearAudioFile('start')">✕</button>
+          </div>
+          <div class="audio-upload-row">
+            <span class="audio-upload-label">⏹ Stop</span>
+            <label class="audio-file-btn" for="audioStop"><span id="audioStopName">Choose file</span><input type="file" id="audioStop" accept="audio/*" onchange="loadAudioFile('stop',this)"></label>
+            <button class="audio-play-btn" onclick="previewCustomAudio('stop')">▷</button>
+            <button class="audio-clear-btn" onclick="clearAudioFile('stop')">✕</button>
+          </div>
+          <div class="audio-upload-row">
+            <span class="audio-upload-label">💤 Rest</span>
+            <label class="audio-file-btn" for="audioRest"><span id="audioRestName">Choose file</span><input type="file" id="audioRest" accept="audio/*" onchange="loadAudioFile('rest',this)"></label>
+            <button class="audio-play-btn" onclick="previewCustomAudio('rest')">▷</button>
+            <button class="audio-clear-btn" onclick="clearAudioFile('rest')">✕</button>
+          </div>
+        </div>
+        <p style="font-family:var(--font-ui);font-size:.7rem;color:var(--mat-muted);letter-spacing:.05em;margin-top:.6rem;line-height:1.4">Custom audio overrides the built-in buzzer.</p>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-gold" style="width:100%" onclick="closeSettingsModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── SESSION NAME MODAL ────────────────────────────────────────── -->
+<div id="sessionModal" class="modal-backdrop" style="display:none" onclick="closeSessionModal(event)">
+  <div class="modal-box" style="max-width:400px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">🥋 Who's Running This Class?</span>
+    </div>
+    <div class="modal-body">
+      <div class="modal-field">
+        <label>Class / Instructor Name</label>
+        <input type="text" id="sessionNameInput" placeholder="e.g. Coach Mike — Fundamentals"
+          maxlength="40"
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1.15rem;padding:.75rem 1rem;outline:none;width:100%;transition:border-color .2s;letter-spacing:.04em"
+          onkeydown="if(event.key==='Enter')submitSessionName()"
+          onfocus="this.style.borderColor='var(--mat-gold)'"
+          onblur="this.style.borderColor='var(--mat-border)'">
+        <span style="font-family:var(--font-ui);font-size:.7rem;color:var(--mat-muted);margin-top:.3rem;letter-spacing:.05em">Shown on TVs and visible to other controllers</span>
+      </div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn btn-outline" onclick="submitSessionName('Unnamed Class')">Skip</button>
+      <button class="btn btn-gold" onclick="submitSessionName()">Start Session</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── DISPLAY ──────────────────────────────────────────────────── -->
+<div id="display" style="display:none">
+  <div class="display-inner" id="displayInner">
+    <div class="display-corner tl" id="displayCornerName">BJJ Mat Timer</div>
+    <div class="display-corner tr" id="displayRoomCorner">
+      <span class="status-dot" id="displayDot"></span>
+      <span id="displayStatusText"></span>
+    </div>
+
+    <button class="display-back-btn" onclick="location.reload()" title="Back to home">← Back</button>
+
+    <div id="displayPanelTimer">
+      <div class="display-round" id="displayRound" style="display:none">Round 1 of 3</div>
+      <div class="display-phase fight" id="displayPhase">FIGHT</div>
+      <div class="display-time" id="displayTime">5:00</div>
+    </div>
+
+    <div id="displayPanelStopwatch" style="display:none;flex-direction:column;align-items:center">
+      <div class="display-round">Stopwatch</div>
+      <div class="display-time" id="displaySwTime">0:00<span style="font-size:.4em;opacity:.55">.00</span></div>
+    </div>
+
+    <div class="display-overlay" id="displayOverlay"><div class="overlay-msg" id="overlayMsg"></div></div>
+
+    <div class="display-reconnect" id="displayReconnect" style="display:none">
+      <div class="reconnect-spinner"></div>
+      <div class="reconnect-text" id="reconnectText">Reconnecting…</div>
+    </div>
+
+
+    <div class="display-clock" id="displayClock">
+      <span id="displayTime2"></span>
+    </div>
+
+    <div class="display-qr" id="displayQr">
+      <div id="displayQrCode"></div>
+      <div class="display-qr-label" id="displayQrLabel"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── BRANDING MODAL ───────────────────────────────────────────── -->
+<div id="brandingModal" class="modal-backdrop" style="display:none" onclick="closeBrandingModal(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">⚙ White Label Settings</span>
+      <button class="modal-close" onclick="closeBrandingModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-field"><label>App Name</label><input type="text" id="bName" placeholder="BJJ Mat Timer" maxlength="40"></div>
+      <div class="modal-field"><label>Tagline</label><input type="text" id="bTagline" placeholder="Competition · Training · Sparring" maxlength="60"></div>
+      <div class="modal-field">
+        <label>Network Name <span style="color:var(--mat-muted);font-weight:400">(e.g. <code style="color:var(--mat-gold)">bjjtimer</code> → bjjtimer.local)</span></label>
+        <input type="text" id="bMdnsName" placeholder="bjjtimer" maxlength="30"
+          style="background:var(--mat-dark);border:1px solid var(--mat-border);border-radius:4px;color:var(--mat-text);font-family:var(--font-ui);font-size:1rem;padding:.6rem .75rem;outline:none;width:100%;transition:border-color .2s"
+          onfocus="this.style.borderColor='var(--mat-gold)'" onblur="this.style.borderColor='var(--mat-border)'"
+          oninput="this.value=this.value.replace(/[^a-z0-9-]/gi,'-').toLowerCase()">
+        <span style="font-family:var(--font-ui);font-size:.7rem;color:var(--mat-muted);margin-top:.2rem">Requires app restart to take effect.</span>
+      </div>
+      <div class="modal-field">
+        <label>Logo Imageel>Logo Image <span style="color:var(--mat-muted);font-weight:400">(PNG, JPG, SVG)</span></label>
+        <div class="logo-upload-row">
+          <div class="logo-preview" id="logoPreview">
+            <span id="logoPreviewDefault">default</span>
+            <img id="logoPreviewImg" src="" style="display:none;width:100%;height:100%;object-fit:contain;border-radius:4px">
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:.5rem">
+            <label class="audio-file-btn" for="logoUpload" style="display:block">
+              <span id="logoUploadName">Choose image file</span>
+              <input type="file" id="logoUpload" accept="image/*" onchange="handleLogoUpload(this)">
+            </label>
+            <button class="btn btn-outline" style="font-size:.8rem;padding:.4rem .75rem" onclick="clearLogo()">Remove logo</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-field">
+        <label>Preview</label>
+        <div class="brand-preview-box">
+          <div class="brand-preview-logo">
+            <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" id="bPreviewDefaultSvg"><circle cx="40" cy="40" r="36" fill="none" stroke="#D4A017" stroke-width="2"/><path d="M20 55 Q30 25 40 40 Q50 55 60 25" fill="none" stroke="#C0392B" stroke-width="3" stroke-linecap="round"/><circle cx="40" cy="40" r="4" fill="#D4A017"/></svg>
+            <img id="bPreviewImg" src="" style="display:none;width:100%;height:100%;object-fit:contain">
+          </div>
+          <div id="bPreviewName" class="brand-preview-name">BJJ Mat Timer</div>
+          <div id="bPreviewTagline" class="brand-preview-tagline">Competition · Training · Sparring</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeBrandingModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="saveBranding()">Save &amp; Apply</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── SOCKET (exponential backoff reconnection) ────────────────────
+const socket = io({
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 30000,
+  randomizationFactor: 0.4,
+  timeout: 10000,
+});
+let mode = null;
+let _displayTvCode = null;
+
+// ─── STATE ────────────────────────────────────────────────────────
+const state = {
+  roundDuration: 5 * 60, restDuration: 60, totalRounds: 10,
+  currentRound: 1, timeRemaining: 5 * 60, running: false,
+  phase: 'fight', warningEnabled: true, warningThreshold: 30,
+  showRound: false, overlayMsg: '',
+};
+
+let timerInterval = null;
+let tvCodes = [];
+let branding = { appName: 'BJJ Mat Timer', tagline: 'Competition · Training · Sparring', logoDataUrl: '' };
+
+// ─── CONTROLLER IDENTITY ──────────────────────────────────────────
+let myCtrlSlot  = null;
+let myCtrlColor = null;
+let myCtrlName  = '';
+let myTvClaims  = new Set();
+
+const CTRL_COLOR_HEX = {
+  blue: '#3B82F6', green: '#10B981', amber: '#F59E0B', pink: '#EC4899',
+};
+const CTRL_COLOR_LABEL = {
+  blue: 'Controller 1', green: 'Controller 2', amber: 'Controller 3', pink: 'Controller 4',
+};
+
+// ─── AUDIO ENGINE ─────────────────────────────────────────────────
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function beep(freq, dur, type='sine', vol=0.6, delay=0) {
+  const ctx = getAudioCtx(), t = ctx.currentTime + delay;
+  const osc = ctx.createOscillator(), gain = ctx.createGain();
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.type = type; osc.frequency.setValueAtTime(freq, t);
+  gain.gain.setValueAtTime(vol, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  osc.start(t); osc.stop(t + dur + 0.05);
+}
+function playCountdownBeep() { beep(880, 0.08, 'square', 0.4); }
+function playAccentBeep() { beep(1320, 0.12, 'square', 0.55); beep(1100, 0.08, 'square', 0.3, 0.12); }
+function playBuzzer() {
+  const ctx = getAudioCtx(), now = ctx.currentTime, dur = 1.8;
+  [[120,90,'sawtooth',0.7],[240,180,'square',0.35],[480,480,'sawtooth',0.15]].forEach(([f1,f2,type,vol],i) => {
+    const osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination); osc.type = type;
+    osc.frequency.setValueAtTime(f1, now); osc.frequency.linearRampToValueAtTime(f2, now + dur);
+    const d = i === 2 ? 0.6 : dur;
+    g.gain.setValueAtTime(vol, now); g.gain.exponentialRampToValueAtTime(0.001, now + d);
+    osc.start(now); osc.stop(now + d + 0.1);
+  });
+}
+function testBuzzer() { playBuzzer(); }
+
+// ─── CUSTOM AUDIO FILES ───────────────────────────────────────────
+const customAudio = { start: null, stop: null, rest: null };
+
+function setAudioSlot(slot, url, name) {
+  customAudio[slot] = { url, name };
+  const nameEl = document.getElementById('audio' + cap(slot) + 'Name');
+  if (nameEl) { nameEl.textContent = name; nameEl.closest('.audio-file-btn').classList.add('loaded'); }
+}
+
+function loadAudioFile(slot, input) {
+  const file = input.files[0]; if (!file) return;
+  const localUrl = URL.createObjectURL(file);
+  setAudioSlot(slot, localUrl, file.name);
+  toast('Uploading ' + cap(slot) + ' sound...');
+  fetch('/api/audio/' + slot, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'audio/mpeg', 'X-Filename': file.name },
+    body: file,
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      URL.revokeObjectURL(localUrl);
+      customAudio[slot] = { url: data.url, name: data.name };
+      toast('✓ ' + cap(slot) + ' sound saved');
+    }
+  })
+  .catch(() => toast('⚠ ' + cap(slot) + ' sound loaded (not saved to disk)'));
+}
+
+async function clearAudioFile(slot) {
+  customAudio[slot] = null;
+  const nameEl = document.getElementById('audio' + cap(slot) + 'Name');
+  if (nameEl) { nameEl.textContent = 'Choose file'; nameEl.closest('.audio-file-btn').classList.remove('loaded'); }
+  const input = document.getElementById('audio' + cap(slot)); if (input) input.value = '';
+  try {
+    await fetch('/api/audio/' + slot, { method: 'DELETE' });
+    // Tell all clients (other controllers, displays) to also clear this slot
+    socket.emit('audio:clear', { slot });
+    toast(cap(slot) + ' sound removed');
+  } catch(e) {
+    toast(cap(slot) + ' sound removed (offline)');
+  }
+}
+
+function previewCustomAudio(slot) {
+  if (!customAudio[slot]) { toast('No ' + slot + ' audio loaded'); return; }
+  playCustomAudio(slot);
+}
+
+function playCustomAudio(slot) {
+  if (!customAudio[slot]?.url) return false;
+  getAudioCtx();
+  new Audio(customAudio[slot].url).play().catch(() => {});
+  return true;
+}
+
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function restoreAudioSlots(audioSlots) {
+  if (!audioSlots) return;
+  for (const [slot, info] of Object.entries(audioSlots)) {
+    if (info?.url) { setAudioSlot(slot, info.url, info.name); }
+  }
+}
+
+function testBuzzer() { playBuzzer(); }
+
+// ─── LANDING ──────────────────────────────────────────────────────
+// Fetch network info and show as fixed footer bar
+fetch('/api/network').then(r => r.json()).then(({ ips, port }) => {
+  if (!ips.length) return;
+  const footer  = document.getElementById('networkFooter');
+  const urlEl   = document.getElementById('networkFooterUrl');
+  if (footer && urlEl) {
+    urlEl.textContent = `http://${ips[0]}:${port}`;
+    footer.classList.add('visible');
+  }
+}).catch(()=>{});
+
+// Fetch config (TV codes + branding + saved audio) on load
+fetch('/api/config').then(r => r.json()).then(cfg => {
+  tvCodes  = cfg.tvCodes;
+  branding = { ...branding, ...cfg.branding };
+  applyBranding();
+  restoreAudioSlots(cfg.audioSlots);
+  // Populate landing TV code cards
+  tvCodes.forEach((code, i) => {
+    const el  = document.getElementById('landing-tv-code-' + (i+1));
+  });
+}).catch(()=>{});
+
+// ─── PROFILE SYSTEM ───────────────────────────────────────────────
+let profiles = [];
+let _pendingProfile = null;
+
+function promptControllerPassword() { openProfilePicker(); }
+
+function loadProfiles() {
+  return fetch('/api/profiles')
+    .then(r => r.json())
+    .then(data => { profiles = Array.isArray(data) ? data : []; })
+    .catch(() => { profiles = profiles || []; });
+}
+
+function openProfilePicker() {
+  loadProfiles().then(() => {
+    renderProfileGrid();
+    const modal = document.getElementById('profilePickerModal');
+    if (modal) modal.style.display = 'flex';
+  });
+}
+
+function closeProfilePicker(e) {
+  if (e && e.target !== document.getElementById('profilePickerModal')) return;
+  document.getElementById('profilePickerModal').style.display = 'none';
+}
+
+function renderProfileGrid() {
+  const grid = document.getElementById('profileGrid');
+  if (!grid) return;
+  if (!profiles.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;font-family:var(--font-ui);font-size:.85rem;color:var(--mat-muted);padding:1rem">No profiles yet — create one below</div>';
+    return;
+  }
+  grid.innerHTML = profiles.map(p => `
+    <div class="profile-card" onclick="selectProfile('${p.id}')" style="border-color:${p.color}44">
+      <div class="profile-color-bar" style="background:${p.color}"></div>
+      <button class="profile-delete" onclick="event.stopPropagation();deleteProfile('${p.id}')" title="Delete">✕</button>
+      <div class="profile-name">${escHtml(p.name)}</div>
+      <div class="profile-meta">${p.hasPin ? '🔒 PIN protected' : 'No PIN'}</div>
+    </div>
+  `).join('');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function selectProfile(id) {
+  const profile = profiles.find(p => p.id === id);
+  if (!profile) return;
+  _pendingProfile = profile;
+  document.getElementById('profilePickerModal').style.display = 'none';
+  if (profile.hasPin) { openPinModal(profile); } else { loginWithProfile(profile); }
+}
+
+async function deleteProfile(id) {
+  const profile = profiles.find(p => p.id === id);
+  if (!profile || !confirm('Delete profile "' + profile.name + '"?')) return;
+  await fetch('/api/profiles/' + id, { method: 'DELETE' });
+  await loadProfiles();
+  renderProfileGrid();
+}
+
+function openCreateProfile() {
+  document.getElementById('profilePickerModal').style.display = 'none';
+  document.getElementById('newProfileName').value = '';
+  document.getElementById('newProfilePin').value  = '';
+  document.getElementById('createProfileModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('newProfileName').focus(), 80);
+}
+
+function closeCreateProfile(e) {
+  if (e && e.target !== document.getElementById('createProfileModal')) return;
+  document.getElementById('createProfileModal').style.display = 'none';
+  openProfilePicker();
+}
+
+async function submitCreateProfile() {
+  const name = document.getElementById('newProfileName').value.trim();
+  const pin  = document.getElementById('newProfilePin').value;
+  if (!name) { document.getElementById('newProfileName').focus(); return; }
+  document.getElementById('createProfileModal').style.display = 'none';
+  const res  = await fetch('/api/profiles', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name, pin }),
+  });
+  const data = await res.json();
+  if (data.ok) {
+    await loadProfiles();
+    const profile = profiles.find(p => p.id === data.id) || { id: data.id, name, color: data.color, hasPin: !!pin, settings: {} };
+    loginWithProfile(profile);
+  }
+}
+
+function openPinModal(profile) {
+  const dot = document.getElementById('pinProfileDot');
+  const title = document.getElementById('pinProfileTitle');
+  const input = document.getElementById('pinInput');
+  const err   = document.getElementById('pinError');
+  if (dot)   dot.style.background = profile.color || '#D4A017';
+  if (title) title.textContent    = profile.name;
+  if (input) input.value = '';
+  if (err)   err.style.display   = 'none';
+  document.getElementById('pinModal').style.display = 'flex';
+  setTimeout(() => input && input.focus(), 80);
+}
+
+function closePinModal(e) {
+  if (e && e.target !== document.getElementById('pinModal')) return;
+  document.getElementById('pinModal').style.display = 'none';
+  openProfilePicker();
+}
+
+async function submitPin() {
+  const input = document.getElementById('pinInput');
+  const err   = document.getElementById('pinError');
+  const pin   = input ? input.value : '';
+  if (!_pendingProfile) return;
+  const res = await fetch('/api/profiles/' + _pendingProfile.id + '/login', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ pin }),
+  });
+  if (res.ok) {
+    const data = await res.json();
+    document.getElementById('pinModal').style.display = 'none';
+    loginWithProfile(data.profile);
+  } else {
+    if (err) err.style.display = 'block';
+    if (input) { input.value=''; input.focus(); input.style.borderColor='var(--mat-red)'; setTimeout(()=>{input.style.borderColor='var(--mat-border)';},1000); }
+  }
+}
+
+function loginWithProfile(profile) {
+  myCtrlName  = profile.name;
+  _pendingProfile = profile;
+  if (profile.settings) {
+    const s = profile.settings;
+    if (s.roundDuration  !== undefined) { state.roundDuration = s.roundDuration; state.timeRemaining = s.roundDuration; }
+    if (s.restDuration   !== undefined) state.restDuration   = s.restDuration;
+    if (s.totalRounds    !== undefined) state.totalRounds    = s.totalRounds;
+    if (s.warningEnabled !== undefined) state.warningEnabled = s.warningEnabled;
+    if (s.warningThreshold !== undefined) state.warningThreshold = s.warningThreshold;
+    if (s.showRound      !== undefined) state.showRound      = s.showRound;
+  }
+  startController();
+}
+
+function closePasswordModal() {
+  ['profilePickerModal','createProfileModal','pinModal'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+}
+function submitPassword() { submitPin(); }
+
+// ─── SESSION NAME ─────────────────────────────────────────────────
+function openSessionModal() {
+  const input = document.getElementById('sessionNameInput');
+  if (input) { input.value = myCtrlName || ''; }
+  document.getElementById('sessionModal').style.display = 'flex';
+  setTimeout(() => input && input.focus(), 80);
+}
+
+// ─── SESSION NAME ─────────────────────────────────────────────────
+function openSessionModal() {
+  const input = document.getElementById('sessionNameInput');
+  if (input) { input.value = myCtrlName || ''; }
+  document.getElementById('sessionModal').style.display = 'flex';
+  setTimeout(() => input && input.focus(), 80);
+}
+
+function closeSessionModal(e) {
+  if (e && e.target !== document.getElementById('sessionModal')) return;
+  document.getElementById('sessionModal').style.display = 'none';
+}
+
+function submitSessionName(fallback) {
+  const input = document.getElementById('sessionNameInput');
+  const name  = (input ? input.value.trim() : '') || fallback || 'Unnamed Class';
+  myCtrlName  = name;
+  document.getElementById('sessionModal').style.display = 'none';
+  startController();
+}
+
+function openRenameSession() {
+  const input = document.getElementById('sessionNameInput');
+  if (input) input.value = myCtrlName || '';
+  document.getElementById('sessionModal').style.display = 'flex';
+  setTimeout(() => input && input.focus(), 80);
+  // Override submit to just rename without re-joining
+  const submitBtn = document.querySelector('#sessionModal .btn-gold');
+  if (submitBtn) {
+    submitBtn._origOnclick = submitBtn.onclick;
+    submitBtn.onclick = () => {
+      const inp = document.getElementById('sessionNameInput');
+      const newName = (inp ? inp.value.trim() : '') || myCtrlName || 'Unnamed Class';
+      myCtrlName = newName;
+      document.getElementById('sessionModal').style.display = 'none';
+      socket.emit('ctrl:rename', { name: newName });
+      applyControllerColor();
+    };
+  }
+}
+
+function startController() {
+  mode = 'controller';
+  socket.emit('join:controller', {
+    name:      myCtrlName || 'Unnamed Class',
+    color:     _pendingProfile?.color || null,
+    profileId: _pendingProfile?.id    || null,
+  });
+  document.getElementById('landing').style.display = 'none';
+  document.getElementById('controller').style.display = 'block';
+  // Keep IP footer visible on controller
+  const footer = document.getElementById('networkFooter');
+  if (footer) footer.classList.add('visible');
+  updateUI();
+}
+
+// ─── LANDING: tap TV card to connect this device as that display ──
+function connectAsDisplay(num) {
+  const code = tvCodes[num - 1];
+  if (!code) {
+    // tvCodes not loaded yet — server may not be running or codes not fetched
+    showConnecting('Connecting…');
+    // Wait for codes then retry
+    const waitForCodes = setInterval(() => {
+      const c = tvCodes[num - 1];
+      if (c) { clearInterval(waitForCodes); hideConnecting(); connectAsDisplay(num); }
+    }, 200);
+    setTimeout(() => { clearInterval(waitForCodes); hideConnecting(); toast('Could not connect — is the server running?'); }, 5000);
+    return;
+  }
+  _displayTvCode = code;
+  mode = 'display';
+  showConnecting('Connecting as TV ' + num + '…');
+
+  function showDisplay() {
+    document.getElementById('landing').style.display = 'none';
+    const d = document.getElementById('display');
+    d.style.display = 'flex';
+    d.style.flexDirection = 'column';
+    // Hide the IP address footer — not needed on display screens
+    const footer = document.getElementById('networkFooter');
+    if (footer) footer.style.display = 'none';
+    generateDisplayQr();
+    requestLastKnownState();
+    setDisplayStatus('connected', 'TV ' + num);
+    hideConnecting();
+  }
+
+  if (socket.connected) {
+    socket.emit('join:tv', { code });
+    showDisplay();
+  } else {
+    socket.once('connect', () => {
+      socket.emit('join:tv', { code });
+      showDisplay();
+    });
+  }
+}
+
+// ─── SOCKET EVENTS ────────────────────────────────────────────────
+let _reconnectAttempt = 0;
+
+socket.on('connect', () => {
+  _reconnectAttempt = 0;
+  hideReconnectOverlay();
+
+  const p  = new URLSearchParams(location.search);
+  const tv = p.get('tv');
+
+  // URL-param display (TV bookmark ?tv=CODE)
+  if (tv && mode !== 'controller') {
+    _displayTvCode = tv.toUpperCase();
+    mode = 'display';
+    socket.emit('join:tv', { code: _displayTvCode });
+  }
+
+  // Re-join after reconnect (server restarted, lost room membership)
+  if (mode === 'display' && _displayTvCode && !tv) {
+    socket.emit('join:tv', { code: _displayTvCode });
+  }
+
+  if (mode === 'display') {
+    document.getElementById('landing').style.display = 'none';
+    const d = document.getElementById('display');
+    d.style.display = 'flex';
+    d.style.flexDirection = 'column';
+    const footer = document.getElementById('networkFooter');
+    if (footer) footer.style.display = 'none';
+    generateDisplayQr(); requestLastKnownState();
+    setDisplayStatus('connected', 'Live');
+    hideConnecting();
+  }
+});
+
+socket.on('disconnect', () => {
+  if (mode !== 'display') return;
+  showReconnectOverlay('Server offline — reconnecting…');
+  setDisplayStatus('connecting', 'Reconnecting...');
+  // Request last known state from SW so display stays populated
+  requestLastKnownState();
+});
+
+socket.on('reconnect_attempt', (attempt) => {
+  if (mode !== 'display') return;
+  _reconnectAttempt = attempt;
+  const text = attempt <= 2
+    ? 'Reconnecting…'
+    : `Reconnecting… (attempt ${attempt})`;
+  showReconnectOverlay(text);
+});
+
+socket.on('reconnect', () => {
+  if (mode !== 'display') return;
+  hideReconnectOverlay();
+  setDisplayStatus('connected', 'Live');
+  // Re-join TV room — critical if server restarted
+  if (_displayTvCode) socket.emit('join:tv', { code: _displayTvCode });
+});
+
+socket.on('reconnect_failed', () => {
+  if (mode !== 'display') return;
+  showReconnectOverlay('Connection lost — waiting for server…');
+});
+
+// ─── RECONNECT OVERLAY ────────────────────────────────────────────
+function showReconnectOverlay(text) {
+  const el = document.getElementById('displayReconnect');
+  const textEl = document.getElementById('reconnectText');
+  if (el) el.style.display = 'flex';
+  if (textEl) textEl.textContent = text;
+}
+function hideReconnectOverlay() {
+  const el = document.getElementById('displayReconnect');
+  if (el) el.style.display = 'none';
+}
+
+socket.on('error', (msg) => { hideConnecting(); toast('Error: ' + msg); });
+socket.on('tv:taken', ({ slot }) => {
+  mode = null;
+  _displayTvCode = null;
+  document.getElementById('display').style.display = 'none';
+  document.getElementById('landing').style.display = 'flex';
+  toast('⚠ TV ' + slot + ' is already in use — choose a different screen');
+});
+
+socket.on('config', (cfg) => {
+  tvCodes  = cfg.tvCodes;
+  branding = { ...branding, ...cfg.branding };
+  if (cfg.ctrlSlot)  myCtrlSlot  = cfg.ctrlSlot;
+  if (cfg.ctrlColor) myCtrlColor = cfg.ctrlColor;
+  applyBranding();
+  applyControllerColor();
+  tvCodes.forEach((code, i) => {
+    const el  = document.getElementById('landing-tv-code-' + (i+1));
+  });
+});
+
+socket.on('state',   (data) => { if (mode === 'display') applyStateSnapshot(data); });
+socket.on('overlay', (msg)  => { if (mode === 'display') showOverlay(msg); });
+socket.on('branding', (b)   => { branding = { ...branding, ...b }; applyBranding(); });
+socket.on('profiles:updated', (updated) => { profiles = updated; });
+socket.on('audio:clear', ({ slot }) => {
+  customAudio[slot] = null;
+  const nameEl = document.getElementById('audio' + cap(slot) + 'Name');
+  if (nameEl) { nameEl.textContent = 'Choose file'; nameEl.closest('.audio-file-btn')?.classList.remove('loaded'); }
+});
+
+socket.on('ctrl:color', ({ color, name } = {}) => {
+  if (mode !== 'display') return;
+  applyDisplayCtrlColor(color, name);
+});
+
+// Tab switching on display
+socket.on('tab', (tab) => {
+  if (mode !== 'display') return;
+  const timer = document.getElementById('displayPanelTimer');
+  const sw    = document.getElementById('displayPanelStopwatch');
+  if (tab === 'stopwatch') {
+    if (timer) timer.style.display = 'none';
+    if (sw)    sw.style.display = 'flex';
+  } else {
+    if (timer) timer.style.display = 'block';
+    if (sw)    sw.style.display = 'none';
+  }
+});
+
+// Stopwatch state on display — uses ts to account for network latency
+let dispSwRaf = null;
+socket.on('sw:state', ({ elapsed, running, ts }) => {
+  if (mode !== 'display') return;
+  cancelAnimationFrame(dispSwRaf);
+  const latency = Date.now() - ts;
+  let dispElapsed = elapsed + (running ? latency : 0);
+  const el = document.getElementById('displaySwTime');
+
+  function dispSwTick() {
+    if (running) dispElapsed += 16; // ~60fps
+    if (el) el.innerHTML = (() => {
+      const mins = Math.floor(dispElapsed/60000);
+      const secs = Math.floor((dispElapsed%60000)/1000);
+      const cs   = Math.floor((dispElapsed%1000)/10);
+      return `${mins}:${String(secs).padStart(2,'0')}<span style="font-size:.4em;opacity:.55">.${String(cs).padStart(2,'0')}</span>`;
+    })();
+    if (running) dispSwRaf = requestAnimationFrame(dispSwTick);
+  }
+  dispSwTick();
+});
+
+socket.on('tv:connected', ({ slot }) => {
+  document.getElementById('tv-slot-' + slot)?.classList.add('connected');
+  document.getElementById('landing-tv-' + slot)?.classList.add('connected');
+});
+socket.on('tv:disconnected', ({ slot }) => {
+  document.getElementById('tv-slot-' + slot)?.classList.remove('connected');
+  document.getElementById('landing-tv-' + slot)?.classList.remove('connected');
+});
+
+// ─── MONITOR STATUS ───────────────────────────────────────────────
+socket.on('monitor:status', ({ tvOwner, tvDisplays, floating, ctrlSlots, ctrlNames }) => {
+  if (mode !== 'controller') return;
+
+  for (let i = 1; i <= 4; i++) {
+    const dispCount  = tvDisplays?.[i] || 0;
+    const ownerSlot  = tvOwner?.[i] || null;
+    const ownerColor = ownerSlot ? CTRL_COLOR_HEX[['','blue','green','amber','pink'][ownerSlot]] : null;
+    const ownerName  = ownerSlot ? (ctrlNames?.[ownerSlot] || 'Unnamed Class') : null;
+    const isMine     = ownerSlot === myCtrlSlot;
+
+    const panel     = document.getElementById('monitor-' + i);
+    const statusEl  = document.getElementById('monitor-status-' + i);
+    const badgeEl   = document.getElementById('monitor-badge-' + i);
+    const claimBtn  = document.getElementById('monitor-claim-' + i);
+
+    // Remove old color classes
+    panel?.classList.remove('active','owned','foreign');
+
+    if (dispCount > 0 || ownerSlot) panel?.classList.add('active');
+
+    // Color the panel border by owning controller
+    if (panel) {
+      panel.style.borderLeftColor = ownerColor || 'var(--mat-border)';
+      if (ownerColor) {
+        panel.style.background = ownerColor + '12';
+        panel.style.borderColor = ownerColor + '55';
+        panel.style.borderLeftColor = ownerColor;
+      } else {
+        panel.style.background = '';
+        panel.style.borderColor = '';
+        panel.style.borderLeftColor = 'var(--mat-border)';
+      }
+    }
+
+    // Status text
+    if (statusEl) {
+      if (ownerSlot && dispCount > 0) {
+        const label = isMine ? 'My class' : (ownerName || 'Another class');
+        statusEl.textContent = label + (dispCount > 1 ? ' · ' + dispCount + ' screens' : '');
+      } else if (ownerSlot) {
+        const label = isMine ? 'My class' : (ownerName || 'Another class');
+        statusEl.textContent = label + ' · no screen';
+      } else if (dispCount > 0) {
+        statusEl.textContent = dispCount + ' screen' + (dispCount > 1 ? 's' : '') + ' · unclaimed';
+      } else {
+        statusEl.textContent = 'Available';
+      }
+    }
+
+    // Dot color
+    const dotEl = document.getElementById('monitor-dot-' + i);
+    if (dotEl) {
+      dotEl.style.background   = ownerColor || (dispCount > 0 ? '#555' : '');
+      dotEl.style.boxShadow    = ownerColor ? `0 0 6px ${ownerColor}` : '';
+    }
+
+    // Claim/release button
+    if (claimBtn) {
+      if (isMine) {
+        claimBtn.textContent = '✕ Release';
+        claimBtn.style.color = CTRL_COLOR_HEX[myCtrlColor] || '';
+        claimBtn.style.borderColor = CTRL_COLOR_HEX[myCtrlColor] + '88' || '';
+        claimBtn.onclick = () => releaseTv(i);
+      } else if (!ownerSlot) {
+        claimBtn.textContent = '+ Claim';
+        claimBtn.style.color = '';
+        claimBtn.style.borderColor = '';
+        claimBtn.onclick = () => claimTv(i);
+      } else {
+        claimBtn.textContent = 'In use';
+        claimBtn.style.color = '#555';
+        claimBtn.style.borderColor = '';
+        claimBtn.onclick = null;
+      }
+    }
+
+    // Landing card status
+    const landingStatus = document.getElementById('landing-tv-status-' + i);
+    const landingCard   = document.getElementById('landing-tv-' + i);
+    const landingHint   = document.getElementById('landing-tv-hint-' + i);
+    if (dispCount > 0) {
+      landingCard?.classList.add('connected');
+      landingCard?.classList.add('tv-taken');
+      if (landingHint)   landingHint.textContent = '● In use';
+      if (landingStatus) { landingStatus.style.background = ownerColor || getSlotColor(i); landingStatus.style.boxShadow = `0 0 8px ${ownerColor || getSlotColor(i)}`; }
+    } else {
+      landingCard?.classList.remove('connected');
+      landingCard?.classList.remove('tv-taken');
+      if (landingHint)   landingHint.textContent = 'tap to connect';
+      if (landingStatus) { landingStatus.style.background = ''; landingStatus.style.boxShadow = ''; }
+    }
+  }
+
+  // Floating panel
+  const floatPanel = document.getElementById('monitor-floating');
+  const floatCount = document.getElementById('monitor-floating-count');
+  const floatDot   = document.getElementById('monitor-floating-dot');
+  if (floating > 0) {
+    floatPanel?.classList.add('active');
+    if (floatCount) floatCount.textContent = floating + ' connected';
+    if (floatDot)   { floatDot.style.background = 'var(--tv-float)'; floatDot.style.boxShadow = '0 0 6px var(--tv-float)'; }
+  } else {
+    floatPanel?.classList.remove('active');
+    if (floatCount) floatCount.textContent = '0 connected';
+    if (floatDot)   { floatDot.style.background = ''; floatDot.style.boxShadow = ''; }
+  }
+});
+
+// ─── TV CLAIM / RELEASE ───────────────────────────────────────────
+function claimTv(tvSlot) {
+  socket.emit('tv:claim', { tvSlot });
+  myTvClaims.add(tvSlot);
+}
+function releaseTv(tvSlot) {
+  socket.emit('tv:release', { tvSlot });
+  myTvClaims.delete(tvSlot);
+}
+
+// ─── CONTROLLER COLOR IDENTITY ────────────────────────────────────
+function applyControllerColor() {
+  if (!myCtrlColor) return;
+  const hex  = CTRL_COLOR_HEX[myCtrlColor] || '#D4A017';
+  const name = myCtrlName || 'Unnamed Class';
+  const dot  = document.getElementById('ctrlDot');
+  if (dot) { dot.style.background = hex; dot.style.boxShadow = `0 0 6px ${hex}`; }
+  const statusText = document.getElementById('ctrlStatusText');
+  if (statusText) statusText.textContent = name;
+  const ctrlEl = document.getElementById('controller');
+  if (ctrlEl) ctrlEl.style.setProperty('--my-ctrl-color', hex);
+}
+
+// ─── DISPLAY: show which controller owns it ───────────────────────
+function applyDisplayCtrlColor(color, name) {
+  const hex    = color ? CTRL_COLOR_HEX[color] : null;
+  const inner  = document.getElementById('displayInner');
+  const textEl = document.getElementById('displayStatusText');
+  const dot    = document.getElementById('displayDot');
+  if (inner) inner.style.borderTop = hex ? `3px solid ${hex}` : '';
+  if (textEl) {
+    textEl.textContent = name || '';
+    textEl.style.color = hex || '';
+  }
+  if (dot && hex) { dot.style.background = hex; dot.style.boxShadow = `0 0 5px ${hex}`; }
+}
+
+function getSlotColor(slot) {
+  return ['','#3B82F6','#10B981','#F59E0B','#EC4899'][slot] || '#888';
+}
+
+// ─── DISPLAY AUDIO — mirror sounds from controller ────────────────
+// ─── DISPLAY AUDIO ────────────────────────────────────────────────
+// AudioContext must be created/resumed after a user gesture.
+// On TVs that auto-connect via URL, we create it lazily on first sound
+// and call resume() which browsers allow even without a gesture
+// once the page has been visible for a moment.
+function tryResumeAudio() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch(e) {}
+}
+
+socket.on('sound', (type) => {
+  if (mode !== 'display') return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const play = () => {
+      switch (type) {
+        case 'beep':   playCountdownBeep(); break;
+        case 'accent': playAccentBeep(); break;
+        case 'buzzer': if (!playCustomAudio('stop'))  playBuzzer(); break;
+        case 'start':  if (!playCustomAudio('start')) beep(660, 0.12, 'sine', 0.5); break;
+        case 'rest':   if (!playCustomAudio('rest'))  { beep(330, 0.3, 'sine', 0.45); setTimeout(() => beep(294, 0.3, 'sine', 0.35), 250); } break;
+      }
+    };
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().then(play).catch(() => {});
+    } else {
+      play();
+    }
+  } catch(e) {}
+});
+
+
+// ─── TIMER LOGIC ──────────────────────────────────────────────────
+function toggleStartPause() { state.running ? pauseTimer() : startTimer(); }
+
+function startTimer() {
+  state.running = true;
+  getAudioCtx();
+  const playedCustom = playCustomAudio('start');
+  if (!playedCustom) beep(660, 0.12, 'sine', 0.5);
+  socket.emit('sound', 'start');
+  if (!timerInterval) timerInterval = setInterval(tick, 1000);
+  document.getElementById('startPauseBtn').textContent = '⏸ Pause';
+  document.getElementById('startPauseBtn').className = 'btn btn-red btn-massive';
+  broadcastState();
+}
+
+function pauseTimer() {
+  state.running = false;
+  clearInterval(timerInterval); timerInterval = null;
+  document.getElementById('startPauseBtn').textContent = '▶ Resume';
+  document.getElementById('startPauseBtn').className = 'btn btn-green btn-massive';
+  broadcastState();
+}
+
+function tick() {
+  if (!state.running) return;
+  const prev = state.timeRemaining;
+  state.timeRemaining--;
+  handleTickSounds(prev, state.timeRemaining);
+  if (state.timeRemaining <= 0) handlePhaseEnd();
+  else { throttledBroadcast(); updateUI(); }
+}
+
+let _lastBroadcast = 0;
+function throttledBroadcast() {
+  const now = Date.now();
+  if (now - _lastBroadcast > 900) { broadcastState(); _lastBroadcast = now; }
+}
+function broadcastState() { socket.emit('state', { ...state }); }
+
+function handleTickSounds(prev, newTime) {
+  const beepOn = document.getElementById('soundBeepToggle')?.checked ?? true;
+  if (state.phase !== 'fight') return;
+  if (beepOn && newTime > 0 && newTime <= 10) {
+    if (newTime <= 3) { playAccentBeep(); socket.emit('sound', 'accent'); }
+    else              { playCountdownBeep(); socket.emit('sound', 'beep'); }
+  }
+}
+
+function handlePhaseEnd() {
+  const buzzerOn = document.getElementById('soundBuzzerToggle')?.checked ?? true;
+  if (state.phase === 'fight') {
+    const playedCustom = playCustomAudio('stop');
+    if (!playedCustom && buzzerOn) playBuzzer();
+    if (playedCustom || buzzerOn) socket.emit('sound', 'buzzer');
+  }
+  if (state.phase === 'fight') {
+    if (state.currentRound >= state.totalRounds) {
+      state.running = false; state.timeRemaining = 0;
+      clearInterval(timerInterval); timerInterval = null;
+      document.getElementById('startPauseBtn').textContent = '▶ Start';
+      document.getElementById('startPauseBtn').className = 'btn btn-green btn-massive';
+      socket.emit('overlay', 'TIME!');
+      broadcastState();
+    } else if (state.restDuration > 0) {
+      state.phase = 'rest'; state.timeRemaining = state.restDuration;
+      const playedCustomRest = playCustomAudio('rest');
+      if (!playedCustomRest) { beep(330, 0.3, 'sine', 0.45); beep(294, 0.3, 'sine', 0.35, 0.25); }
+      socket.emit('sound', 'rest');
+      socket.emit('overlay', 'REST');
+    } else {
+      // No rest period — go straight to next round with start sound
+      const playedCustomStart = playCustomAudio('start');
+      if (!playedCustomStart) beep(660, 0.12, 'sine', 0.5);
+      socket.emit('sound', 'start');
+      nextRound();
+    }
+  } else {
+    // Rest ended — start next round
+    state.currentRound++; state.phase = 'fight'; state.timeRemaining = state.roundDuration;
+    const playedCustomStart = playCustomAudio('start');
+    if (!playedCustomStart) beep(660, 0.12, 'sine', 0.5);
+    socket.emit('sound', 'start');
+    socket.emit('overlay', 'FIGHT!');
+    setTimeout(() => socket.emit('overlay', ''), 2500);
+  }
+  updateUI(); broadcastState();
+}
+
+function resetTimer() {
+  clearInterval(timerInterval); timerInterval = null;
+  state.running = false; state.currentRound = 1; state.phase = 'fight';
+  state.timeRemaining = state.roundDuration;
+  document.getElementById('startPauseBtn').textContent = '▶ Start';
+  document.getElementById('startPauseBtn').className = 'btn btn-green btn-massive';
+  updateUI(); broadcastState(); socket.emit('overlay', '');
+}
+
+function nextRound() {
+  if (state.currentRound < state.totalRounds) state.currentRound++;
+  state.phase = 'fight'; state.timeRemaining = state.roundDuration; state.running = false;
+  clearInterval(timerInterval); timerInterval = null;
+  document.getElementById('startPauseBtn').textContent = '▶ Start';
+  document.getElementById('startPauseBtn').className = 'btn btn-green btn-massive';
+  updateUI(); broadcastState();
+}
+
+// ─── SETTINGS MODAL ───────────────────────────────────────────────
+function openSettingsModal() {
+  document.getElementById('settingsModal').style.display = 'flex';
+}
+function closeSettingsModal(e) {
+  if (e && e.target !== document.getElementById('settingsModal')) return;
+  document.getElementById('settingsModal').style.display = 'none';
+}
+
+// ─── DURATION (1–10 min pills) ────────────────────────────────────
+function setDurationMin(min) {
+  state.roundDuration = min * 60;
+  if (!state.running) state.timeRemaining = state.roundDuration;
+  document.querySelectorAll('.dur-pill').forEach((b, i) => {
+    b.classList.toggle('active', i + 1 === min);
+  });
+  updateUI(); broadcastState();
+  if (_pendingProfile?.id) {
+    socket.emit('profile:save', { profileId: _pendingProfile.id, settings: { roundDuration: state.roundDuration } });
+  }
+}
+
+// Legacy stubs kept for any inline references (no-ops now)
+function setPreset(min, sec) { setDurationMin(min); }
+function setCustomTime() {}
+
+function updateConfig() {
+  state.totalRounds      = parseInt(document.getElementById('totalRoundsInput').value)||1;
+  state.restDuration     = parseInt(document.getElementById('restTimeInput').value)||0;
+  state.warningEnabled   = document.getElementById('warningToggle').checked;
+  state.warningThreshold = parseInt(document.getElementById('warningThreshold').value)||30;
+  state.showRound        = document.getElementById('showRoundToggle').checked;
+  updateUI(); broadcastState();
+  // Auto-save settings back to profile
+  if (_pendingProfile?.id) {
+    socket.emit('profile:save', {
+      profileId: _pendingProfile.id,
+      settings: {
+        roundDuration:    state.roundDuration,
+        restDuration:     state.restDuration,
+        totalRounds:      state.totalRounds,
+        warningEnabled:   state.warningEnabled,
+        warningThreshold: state.warningThreshold,
+        showRound:        state.showRound,
+      },
+    });
+  }
+}
+
+// ─── MESSAGES ─────────────────────────────────────────────────────
+function sendMsg() { const m = document.getElementById('msgInput').value.trim(); socket.emit('overlay', m); }
+function sendQuickMsg(msg) { document.getElementById('msgInput').value = msg; socket.emit('overlay', msg); }
+
+// ─── UI UPDATE ────────────────────────────────────────────────────
+function formatTime(s) { return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0'); }
+function getTimerClass() {
+  if (state.phase === 'fight' && state.warningEnabled) {
+    if (state.timeRemaining <= 10) return 'danger';
+    if (state.timeRemaining <= state.warningThreshold) return 'warning';
+  }
+  return '';
+}
+function updateUI() {
+  if (mode !== 'controller') return;
+  const timeStr = formatTime(state.timeRemaining), cls = getTimerClass();
+  const ctrlTimer = document.getElementById('ctrlTimer');
+  ctrlTimer.textContent = timeStr; ctrlTimer.className = 'ctrl-timer-display ' + cls;
+  document.getElementById('ctrlRoundLabel').textContent = state.phase === 'rest' ? 'Rest' : `Round ${state.currentRound} of ${state.totalRounds}`;
+  const pl = document.getElementById('ctrlPhaseLabel');
+  pl.textContent = state.phase === 'fight' ? 'Fight' : 'Rest';
+  pl.className = 'phase-label ' + state.phase;
+}
+
+function applyStateSnapshot(s) {
+  Object.assign(state, s);
+  const timeStr = formatTime(state.timeRemaining), cls = getTimerClass();
+  document.getElementById('displayTime').textContent = timeStr;
+  document.getElementById('displayTime').className = 'display-time ' + cls;
+  const roundEl = document.getElementById('displayRound');
+  if (roundEl) {
+    roundEl.textContent = state.phase === 'rest' ? 'REST' : `Round ${state.currentRound} of ${state.totalRounds}`;
+    roundEl.style.display = state.showRound ? '' : 'none';
+  }
+  const dPhase = document.getElementById('displayPhase');
+  dPhase.textContent = state.phase === 'fight' ? 'FIGHT' : 'REST';
+  dPhase.className = 'display-phase ' + state.phase;
+  document.getElementById('displayInner').classList.toggle('phase-rest', state.phase === 'rest');
+
+  // Persist last known state to service worker so display survives server restart
+  if (navigator.serviceWorker?.controller) {
+    navigator.serviceWorker.controller.postMessage({ type: 'SAVE_STATE', state: { ...state } });
+  }
+}
+
+function showOverlay(msg) {
+  const overlay = document.getElementById('displayOverlay');
+  document.getElementById('overlayMsg').textContent = msg;
+  if (msg) {
+    overlay.classList.add('visible');
+    if (msg !== 'STOP') setTimeout(() => overlay.classList.remove('visible'), 3000);
+  } else { overlay.classList.remove('visible'); }
+}
+
+// ─── TV LINKS ─────────────────────────────────────────────────────
+function copyTvLink(num) {
+  const code = tvCodes[num - 1]; if (!code) return;
+  const url = `${location.origin}?tv=${code}`;
+  navigator.clipboard.writeText(url).then(() => toast(`TV ${num} link copied! (${code})`)).catch(() => prompt('TV ' + num + ' link:', url));
+}
+
+// ─── STATUS ───────────────────────────────────────────────────────
+function setDisplayStatus(status, text) {
+  const dot = document.getElementById('displayDot');
+  if (dot) dot.className = 'status-dot ' + status;
+  // status text is now shown in displayStatusText span (hidden by default, fine to update)
+  const textEl = document.getElementById('displayStatusText');
+  if (textEl) textEl.textContent = '';
+}
+
+// ─── TABS ─────────────────────────────────────────────────────────
+let activeTab = 'timer';
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('tabTimer').classList.toggle('active', tab === 'timer');
+  document.getElementById('tabStopwatch').classList.toggle('active', tab === 'stopwatch');
+  document.getElementById('panelTimer').classList.toggle('hidden', tab !== 'timer');
+  document.getElementById('panelStopwatch').classList.toggle('hidden', tab !== 'stopwatch');
+  // Tell displays which panel to show
+  socket.emit('tab', tab);
+}
+
+// ─── STOPWATCH ────────────────────────────────────────────────────
+let swRunning = false, swElapsed = 0, swStartTime = null, swRafId = null;
+let swBroadcastTimer = null;
+
+function swFormatDisplay(ms) {
+  const mins = Math.floor(ms/60000);
+  const secs = Math.floor((ms%60000)/1000);
+  const cs   = Math.floor((ms%1000)/10);
+  return `${mins}:${String(secs).padStart(2,'0')}<span style="font-size:.4em;opacity:.55">.${String(cs).padStart(2,'0')}</span>`;
+}
+
+function swBroadcast() {
+  // Send elapsed + whether running + timestamp so displays can interpolate
+  socket.emit('sw:state', { elapsed: swElapsed, running: swRunning, ts: Date.now() });
+}
+
+function swTick() {
+  if (!swRunning) return;
+  swElapsed += Date.now() - swStartTime; swStartTime = Date.now();
+  document.getElementById('swDisplay').innerHTML = swFormatDisplay(swElapsed);
+  swRafId = requestAnimationFrame(swTick);
+}
+
+function swToggle() {
+  if (swRunning) {
+    swRunning = false; cancelAnimationFrame(swRafId);
+    clearInterval(swBroadcastTimer);
+    document.getElementById('swStartPauseBtn').textContent = '▶ Resume';
+    document.getElementById('swStartPauseBtn').className = 'btn btn-green btn-massive';
+  } else {
+    swRunning = true; swStartTime = Date.now(); getAudioCtx();
+    document.getElementById('swStartPauseBtn').textContent = '⏸ Pause';
+    document.getElementById('swStartPauseBtn').className = 'btn btn-red btn-massive';
+    swRafId = requestAnimationFrame(swTick);
+    // Broadcast every second so displays stay in sync
+    swBroadcastTimer = setInterval(swBroadcast, 1000);
+  }
+  swBroadcast();
+}
+
+function swReset() {
+  swRunning = false; cancelAnimationFrame(swRafId);
+  clearInterval(swBroadcastTimer);
+  swElapsed = 0; swStartTime = null;
+  document.getElementById('swDisplay').innerHTML = swFormatDisplay(0);
+  document.getElementById('swStartPauseBtn').textContent = '▶ Start';
+  document.getElementById('swStartPauseBtn').className = 'btn btn-green btn-massive';
+  swBroadcast();
+}
+
+// ─── BRANDING ─────────────────────────────────────────────────────
+function applyBranding() {
+  const name   = branding.appName || 'BJJ Mat Timer';
+  const tagline = branding.tagline || 'Competition · Training · Sparring';
+  const logo   = branding.logoDataUrl || '';
+  document.title = name;
+
+  // Landing
+  const titleEl = document.getElementById('landingTitle');    if (titleEl) titleEl.textContent = name;
+  const tagEl   = document.getElementById('landingTagline');  if (tagEl)   tagEl.textContent = tagline;
+  // Display corner
+  const cornerEl = document.getElementById('displayCornerName'); if (cornerEl) cornerEl.textContent = name;
+
+  // Logo — landing
+  const svgEl = document.getElementById('landingLogoSvg'), imgEl = document.getElementById('landingLogoImg');
+  if (logo) { if (svgEl) svgEl.style.display='none'; if (imgEl){imgEl.src=logo;imgEl.style.display='block';} }
+  else       { if (svgEl) svgEl.style.display='block'; if (imgEl) imgEl.style.display='none'; }
+}
+function openBrandingModal() {
+  document.getElementById('bName').value     = branding.appName || '';
+  document.getElementById('bTagline').value  = branding.tagline || '';
+  [1,2,3,4].forEach(i => { const el = document.getElementById('bPin'+i); if (el) el.value = slotPins[i] || ''; });
+  document.getElementById('bMdnsName').value = branding.mdnsName || 'bjjtimer';
+  const logo = branding.logoDataUrl || '';
+  const img = document.getElementById('logoPreviewImg'), def = document.getElementById('logoPreviewDefault');
+  const bImg = document.getElementById('bPreviewImg'), bSvg = document.getElementById('bPreviewDefaultSvg');
+  if (logo) {
+    img.src=logo; img.style.display='block'; def.style.display='none';
+    bImg.src=logo; bImg.style.display='block'; bSvg.style.display='none';
+    document.getElementById('logoUploadName').textContent='Logo loaded';
+    document.getElementById('logoUpload').closest('.audio-file-btn').classList.add('loaded');
+  } else {
+    img.style.display='none'; def.style.display='';
+    bImg.style.display='none'; bSvg.style.display='block';
+    document.getElementById('logoUploadName').textContent='Choose image file';
+    document.getElementById('logoUpload').closest('.audio-file-btn').classList.remove('loaded');
+  }
+  updateBrandPreview();
+  document.getElementById('brandingModal').style.display='flex';
+}
+function closeBrandingModal(e) {
+  if (e && e.target !== document.getElementById('brandingModal')) return;
+  document.getElementById('brandingModal').style.display='none';
+}
+function handleLogoUpload(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const d = e.target.result;
+    document.getElementById('logoPreviewImg').src=d; document.getElementById('logoPreviewImg').style.display='block';
+    document.getElementById('logoPreviewDefault').style.display='none';
+    document.getElementById('bPreviewImg').src=d; document.getElementById('bPreviewImg').style.display='block';
+    document.getElementById('bPreviewDefaultSvg').style.display='none';
+    input._pendingDataUrl=d;
+    document.getElementById('logoUploadName').textContent=file.name;
+    input.closest('.audio-file-btn').classList.add('loaded');
+  };
+  reader.readAsDataURL(file);
+}
+function clearLogo() {
+  branding.logoDataUrl='';
+  document.getElementById('logoPreviewImg').style.display='none'; document.getElementById('logoPreviewDefault').style.display='';
+  document.getElementById('bPreviewImg').style.display='none'; document.getElementById('bPreviewDefaultSvg').style.display='block';
+  document.getElementById('logoUploadName').textContent='Choose image file';
+  document.getElementById('logoUpload').closest('.audio-file-btn').classList.remove('loaded');
+  document.getElementById('logoUpload').value=''; document.getElementById('logoUpload')._pendingDataUrl=null;
+  updateBrandPreview();
+}
+function updateBrandPreview() {
+  document.getElementById('bPreviewName').textContent = document.getElementById('bName').value || 'BJJ Mat Timer';
+  document.getElementById('bPreviewTagline').textContent = document.getElementById('bTagline').value || 'Competition · Training · Sparring';
+}
+document.addEventListener('DOMContentLoaded', () => {
+  ['bName','bTagline'].forEach(id => { const el=document.getElementById(id); if(el) el.addEventListener('input',updateBrandPreview); });
+});
+async function saveBranding() {
+  const logoInput = document.getElementById('logoUpload');
+  branding.appName   = document.getElementById('bName').value.trim() || 'BJJ Mat Timer';
+  branding.tagline   = document.getElementById('bTagline').value.trim() || 'Competition · Training · Sparring';
+  branding.mdnsName  = document.getElementById('bMdnsName').value.trim() || 'bjjtimer';
+  if (logoInput._pendingDataUrl) branding.logoDataUrl = logoInput._pendingDataUrl;
+  const newPins = { 1: document.getElementById('bPin1')?.value||'', 2: document.getElementById('bPin2')?.value||'', 3: document.getElementById('bPin3')?.value||'', 4: document.getElementById('bPin4')?.value||'' };
+  Object.assign(slotPins, newPins);
+  await fetch('/api/branding', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...branding, slotPins: newPins }) });
+  applyBranding();
+  document.getElementById('brandingModal').style.display='none';
+  toast('✓ Settings saved');
+}
+
+// ─── KEYBOARD SHORTCUTS ───────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (mode !== 'controller') return;
+  if (e.target.tagName === 'INPUT') return;
+  if (activeTab === 'timer') {
+    if (e.code==='Space') { e.preventDefault(); toggleStartPause(); }
+    if (e.code==='KeyR') resetTimer();
+    if (e.code==='KeyN') nextRound();
+  } else {
+    if (e.code==='Space') { e.preventDefault(); swToggle(); }
+    if (e.code==='KeyR') swReset();
+  }
+});
+
+// ─── QR CODE (display screen bottom-right) ───────────────────────
+let _qrGenerated = false;
+
+function generateDisplayQr() {
+  if (_qrGenerated) return;
+  const container = document.getElementById('displayQrCode');
+  const label     = document.getElementById('displayQrLabel');
+  if (!container) return;
+
+  fetch('/api/network')
+    .then(r => r.json())
+    .then(({ ipUrl, mdnsName, ips, port }) => {
+      // Always use raw IP — works on every device including Android
+      const url = ipUrl || location.origin;
+      // Show both the IP and the .local name as a label
+      const ipDisplay = ips && ips[0] ? `${ips[0]}:${port}` : location.host;
+      const localName = mdnsName ? `${mdnsName}.local` : '';
+      renderQr(container, label, url, ipDisplay, localName);
+    })
+    .catch(() => renderQr(container, label, location.origin, location.host, ''));
+}
+
+function renderQr(container, label, url, ipDisplay, localName) {
+  try {
+    container.innerHTML = '';
+    new QRCode(container, {
+      text:         url,
+      width:        110,
+      height:       110,
+      colorDark:    '#000000',
+      colorLight:   '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+    if (label) label.style.display = 'none';
+    _qrGenerated = true;
+  } catch(e) {
+    setTimeout(generateDisplayQr, 500);
+  }
+}
+
+// ─── DISPLAY CLOCK ────────────────────────────────────────────────
+function updateDisplayClock() {
+  const now = new Date();
+  let h = now.getHours();
+  const min = String(now.getMinutes()).padStart(2,'0');
+  const ampm = h >= 12 ? 'pm' : 'am';
+  h = h % 12 || 12;
+  const timeEl = document.getElementById('displayTime2');
+  if (timeEl) timeEl.textContent = `${h}:${min} ${ampm}`;
+}
+updateDisplayClock();
+setInterval(updateDisplayClock, 1000);
+
+// ─── HELPERS ──────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg) {
+  const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('show'),3000);
+}
+let connectingEl=null;
+function showConnecting(msg) {
+  if (connectingEl) return;
+  connectingEl=document.createElement('div'); connectingEl.className='connecting-overlay';
+  connectingEl.innerHTML=`<div class="spinner"></div><span style="color:var(--mat-muted);font-size:.9rem;letter-spacing:.2em">${msg}</span>`;
+  document.body.appendChild(connectingEl);
+}
+function hideConnecting() { if (connectingEl) { connectingEl.remove(); connectingEl=null; } }
+
+// ─── PWA Service Worker ───────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+  // Listen for messages from SW (last known state response)
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.type === 'LAST_STATE' && e.data.state && mode === 'display') {
+      // Apply cached state so display isn't blank while reconnecting
+      applyStateSnapshot(e.data.state);
+    }
+  });
+}
+
+// When display connects, ask SW for last known state immediately
+// (handles page reload while server is offline)
+function requestLastKnownState() {
+  if (navigator.serviceWorker?.controller) {
+    navigator.serviceWorker.controller.postMessage({ type: 'GET_STATE' });
+  }
+}
+
+// ─── Electron IPC bridge ──────────────────────────────────────────
+// When running inside Electron, supplement the fetch-based network info
+// with data from the main process via preload IPC.
+if (window.electronAPI) {
+  window.electronAPI.getNetworkInfo().then(({ ips, port }) => {
+    if (!ips.length) return;
+    const footer = document.getElementById('networkFooter');
+    const urlEl  = document.getElementById('networkFooterUrl');
+    if (footer && urlEl) {
+      urlEl.textContent = `http://${ips[0]}:${port}`;
+      footer.classList.add('visible');
+    }
+  }).catch(() => {});
+}
+</script>
+
+<!-- Fixed bottom bar showing server address -->
+<div class="network-footer" id="networkFooter">
+  <span class="network-footer-label">Open on any device at</span>
+  <span class="network-footer-url" id="networkFooterUrl"></span>
+</div>
+
+</body>
+</html>
